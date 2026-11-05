@@ -6,6 +6,7 @@ DBT_DIR := transform
 DUCKDB_DIR := $(CURDIR)/data/duckdb
 FIXTURE_DIR := $(CURDIR)/data/fixtures/ga4
 DBT_CI_ENV := DBT_PROFILES_DIR=$(CURDIR)/$(DBT_DIR)/ci DBT_DUCKDB_PATH=$(DUCKDB_DIR)/ci.duckdb
+SQL_DIRS := $(wildcard transform infra)
 DBT_CI := cd $(DBT_DIR) && $(DBT_CI_ENV) $(UV) run dbt
 
 .PHONY: help setup lint format test fixtures dbt-deps dbt-ci docs secrets clean
@@ -22,7 +23,7 @@ setup: ## Install pinned dependencies, git hooks and dbt packages
 lint: ## Run ruff and sqlfluff without changing files
 	$(UV) run ruff check .
 	$(UV) run ruff format --check .
-	$(UV) run sqlfluff lint transform infra
+	$(UV) run sqlfluff lint $(SQL_DIRS)
 
 format: ## Apply ruff formatting and safe fixes
 	$(UV) run ruff format .
