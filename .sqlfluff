@@ -1,0 +1,46 @@
+[sqlfluff]
+# Snowflake is the primary warehouse. DuckDB-specific syntax lives only in
+# adapter.dispatch macros, so models stay valid Snowflake SQL.
+dialect = snowflake
+templater = jinja
+max_line_length = 100
+large_file_skip_byte_limit = 50000
+
+[sqlfluff:templater:jinja]
+# Stubs for ref(), source(), config() and other dbt built-ins, so SQL can be
+# linted without a warehouse connection or credentials.
+apply_dbt_builtins = True
+load_macros_from_path = transform/macros
+
+[sqlfluff:indentation]
+tab_space_size = 4
+indented_joins = False
+indented_using_on = True
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.identifiers]
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.literals]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.types]
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:aliasing.table]
+aliasing = explicit
+
+[sqlfluff:rules:aliasing.column]
+aliasing = explicit
+
+[sqlfluff:rules:ambiguous.column_references]
+group_by_and_order_by_style = explicit
+
+[sqlfluff:rules:convention.terminator]
+multiline_newline = False
+require_final_semicolon = False
