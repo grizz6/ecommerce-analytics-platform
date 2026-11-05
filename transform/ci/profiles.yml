@@ -1,0 +1,10 @@
+# DuckDB profile for CI and local runs on synthetic fixtures.
+# It contains no secrets and never connects to Snowflake or BigQuery.
+ecommerce_analytics:
+  target: ci
+  outputs:
+    ci:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', '../data/duckdb/ci.duckdb') }}"
+      schema: ci
+      threads: 4

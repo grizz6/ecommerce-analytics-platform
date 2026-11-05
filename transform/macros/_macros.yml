@@ -1,0 +1,15 @@
+version: 2
+
+macros:
+  - name: generate_schema_name
+    description: >
+      Builds models in their custom schema name on the prod target, and in
+      <target schema>_<custom schema> on every other target, so development
+      and CI runs never write to production schemas.
+    arguments:
+      - name: custom_schema_name
+        type: optional[string]
+        description: The schema configured on the model, or none.
+      - name: node
+        type: any
+        description: The node being built.

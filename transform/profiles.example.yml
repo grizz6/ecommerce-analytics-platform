@@ -1,0 +1,38 @@
+# Copy to ~/.dbt/profiles.yml. Every connection value is read from an
+# environment variable; no value is ever written into this file.
+# Authentication is key pair only. The encrypted PKCS#8 private key lives in
+# ~/.snowflake/keys/ (chmod 600) and its passphrase comes from the environment.
+ecommerce_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_DBT_USER') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_DBT_PRIVATE_KEY_PATH') }}"
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_DBT_PRIVATE_KEY_PASSPHRASE') }}"
+      role: "{{ env_var('SNOWFLAKE_DBT_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_DBT_WAREHOUSE') }}"
+      database: "{{ env_var('SNOWFLAKE_ANALYTICS_DATABASE') }}"
+      schema: "{{ env_var('SNOWFLAKE_DBT_SCHEMA', 'dev') }}"
+      threads: 4
+      client_session_keep_alive: false
+
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_DBT_USER') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_DBT_PRIVATE_KEY_PATH') }}"
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_DBT_PRIVATE_KEY_PASSPHRASE') }}"
+      role: "{{ env_var('SNOWFLAKE_DBT_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_DBT_WAREHOUSE') }}"
+      database: "{{ env_var('SNOWFLAKE_ANALYTICS_DATABASE') }}"
+      schema: analytics
+      threads: 4
+      client_session_keep_alive: false
+
+    local:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', '../data/duckdb/local.duckdb') }}"
+      schema: local
+      threads: 4
