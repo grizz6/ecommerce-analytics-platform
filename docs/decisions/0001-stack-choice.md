@@ -16,7 +16,7 @@ the Snowflake trial ends, the project must still run end to end without it.
 | Layer | Choice | Version | Why |
 |---|---|---|---|
 | Language | Python | 3.12 | Supported by every tool below and matches the Astro Runtime image, so the Mac, CI and Airflow run the same minor version. |
-| Packaging | uv | 0.11.32 | Fast, reproducible installs from a committed lock file, with dependency groups per component. |
+| Packaging | uv | 0.13.7 | Fast, reproducible installs from a committed lock file, with dependency groups per component. |
 | Source | BigQuery public dataset | google-cloud-bigquery 3.47.0 | Sandbox access is free. Dry runs report bytes before a query runs. |
 | File format | Parquet | pyarrow 26.0.1 | Keeps nested GA4 fields nested, and both Snowflake and DuckDB read it natively. |
 | Warehouse | Snowflake (trial) | snowflake-connector-python 5.2.0 | Production-style warehouse with key-pair auth, roles and resource monitors. |
