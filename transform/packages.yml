@@ -1,0 +1,5 @@
+packages:
+  # Pinned to an exact release tag. A git source keeps installs identical on
+  # every machine, including networks that cannot reach the dbt package hub.
+  - git: https://github.com/dbt-labs/dbt-utils.git
+    revision: 1.4.1

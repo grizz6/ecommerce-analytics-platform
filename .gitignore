@@ -1,0 +1,62 @@
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.p8
+*.pem
+*.key
+*.pub
+keys/
+.snowflake/
+airflow_settings.yaml
+
+# Data (never committed)
+data/
+*.parquet
+*.duckdb
+*.duckdb.wal
+
+# Exported CSV files. Small reference seeds for dbt are the only exception.
+*.csv
+!transform/seeds/*.csv
+
+# dbt
+transform/target/
+transform/dbt_packages/
+transform/logs/
+target/
+dbt_packages/
+logs/
+.user.yml
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.egg-info/
+
+# Airflow (Astro CLI)
+orchestration/.astro/
+orchestration/logs/
+orchestration/.env
+
+# Metabase volumes
+bi/metabase/data/
+bi/metabase/pgdata/
+bi/metabase/volumes/
+
+# Power BI working files
+*.pbix
+*.pbit
+
+# Editors and operating system
+.DS_Store
+.idea/
+.vscode/
+*.swp
