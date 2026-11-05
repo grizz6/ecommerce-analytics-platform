@@ -1,0 +1,76 @@
+[project]
+name = "ecommerce-analytics-platform"
+version = "0.1.0"
+description = "Analytics engineering pipeline for the GA4 sample e-commerce dataset."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pyarrow==26.0.1",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit==4.7.0",
+    "pytest==9.2.0",
+    "pytest-cov==7.1.0",
+    "ruff==0.17.4",
+    "sqlfluff==4.5.0",
+]
+extract = [
+    "google-cloud-bigquery==3.47.0",
+]
+load = [
+    "snowflake-connector-python==5.2.0",
+]
+dbt = [
+    "dbt-core==1.12.6",
+    "dbt-duckdb==1.11.1",
+    "dbt-snowflake==1.12.5",
+    "duckdb==1.5.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["transform/dbt_packages", "transform/target"]
+
+[tool.ruff.lint]
+select = [
+    "ANN",  # type hints on every function
+    "B",    # likely bugs
+    "C4",   # comprehensions
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # import order
+    "N",    # naming
+    "PL",   # pylint rules
+    "PTH",  # pathlib over os.path
+    "RUF",  # ruff-specific rules
+    "S",    # security checks
+    "SIM",  # simplifications
+    "T20",  # no print statements; use logging
+    "UP",   # modern syntax
+    "W",    # pycodestyle warnings
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "PLR2004", "S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--cov=extract_load",
+    "--cov=scripts",
+    "--cov-report=term-missing",
+    "--cov-fail-under=80",
+]
+
+[tool.coverage.run]
+branch = true
