@@ -7,6 +7,7 @@ import snowflake.connector
 from snowflake.connector.errors import OperationalError, ProgrammingError
 
 from extract_load.config import ConfigError
+from extract_load.logging_utils import configure_logging
 from extract_load.snowflake_client import (
     DRIVER_LOGGERS,
     SnowflakeError,
@@ -147,3 +148,40 @@ def test_column_index_is_case_insensitive() -> None:
     assert column_index(_DescribedCursor(), "rows_loaded") == 1  # type: ignore[arg-type]
     with pytest.raises(SnowflakeError, match="no column"):
         column_index(_DescribedCursor(), "missing")  # type: ignore[arg-type]
+
+
+def test_connect_disables_session_keep_alive_detection(
+    key_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(snowflake.connector, "connect", lambda **kwargs: captured.update(kwargs))
+    connect(SnowflakeSettings.for_loader(_env(key_file)))
+    assert captured["enable_server_session_keep_alive_auto_detection"] is False
+
+
+def test_driver_info_logs_are_filtered_even_on_child_loggers(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging("INFO")
+    child = logging.getLogger("snowflake.connector._common.extras")
+    child.setLevel(logging.INFO)  # the driver sets its own child logger levels
+    quiet_driver_logs()
+    quiet_driver_logs()  # calling twice must not stack filters
+
+    child.info("pyarrow is installed")
+    child.warning("a real driver warning")
+    logging.getLogger("extract_load.test").info("our own message")
+
+    logged = capsys.readouterr().err
+    assert "pyarrow is installed" not in logged
+    assert "a real driver warning" in logged
+    assert "our own message" in logged
+    root_handler = logging.getLogger().handlers[0]
+    assert sum(type(f).__name__ == "_DriverLogFilter" for f in root_handler.filters) == 1
+
+
+def test_sql_error_messages_hide_the_home_directory() -> None:
+    message = f"Failed to upload files. File does not exist: {Path.home()}/code/part-0.parquet"
+    described = describe_driver_error(ProgrammingError(msg=message, errno=253006))
+    assert str(Path.home()) not in described
+    assert "~/code/part-0.parquet" in described

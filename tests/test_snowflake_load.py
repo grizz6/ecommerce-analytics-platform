@@ -24,10 +24,24 @@ def _settings() -> SnowflakeSettings:
 def test_put_replaces_the_day_folder_without_recompressing(loader_env: ExtractedData) -> None:
     local = loader_env.raw_dir / "event_date=20201101" / "part-0.parquet"
     sql = sl.put_sql(local, _settings(), "20201101")
-    assert sql.startswith("put 'file://")
+    assert sql.startswith(f"put 'file://{local.resolve().as_posix()}' ")
     assert "'@RAW.GA4.EVENTS_STAGE/event_date=20201101/'" in sql
     assert "auto_compress = false" in sql
     assert "overwrite = true" in sql
+
+
+def test_put_path_is_literal_not_url_encoded(loader_env: ExtractedData) -> None:
+    # PUT reads the path literally; "%3D" for "=" sends it to a folder that does not exist.
+    local = loader_env.raw_dir / "event_date=20201101" / "part-0.parquet"
+    sql = sl.put_sql(local, _settings(), "20201101")
+    assert "event_date=20201101/part-0.parquet' " in sql
+    assert "%3D" not in sql
+    assert "%20" not in sql
+
+
+def test_put_path_escapes_quotes_and_keeps_spaces(tmp_path: Path) -> None:
+    odd = tmp_path / "Grishma's files" / "part-0.parquet"
+    assert sl.sql_string_path(odd).endswith("/Grishma\\'s files/part-0.parquet")
 
 
 def test_copy_matches_columns_and_adds_metadata(loader_env: ExtractedData) -> None:

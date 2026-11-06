@@ -58,11 +58,20 @@ def stage_folder(settings: SnowflakeSettings, event_date: str) -> str:
     return f"{settings.events_stage}/event_date={event_date}/"
 
 
+def sql_string_path(path: Path) -> str:
+    """Escape a local path for a single-quoted SQL string, the same way the driver does.
+
+    The path must not be URL-encoded: PUT reads it literally, so encoding the
+    "=" in event_date=YYYYMMDD would point it at a folder that does not exist.
+    """
+    return path.resolve().as_posix().replace("\\", "\\\\").replace("'", "\\'")
+
+
 def put_sql(local_file: Path, settings: SnowflakeSettings, event_date: str) -> str:
     """Upload one file, uncompressed (Parquet is already compressed), replacing old copies."""
-    uri = local_file.resolve().as_uri()
     return (
-        f"put '{uri}' '{stage_folder(settings, event_date)}' auto_compress = false overwrite = true"
+        f"put 'file://{sql_string_path(local_file)}' '{stage_folder(settings, event_date)}' "
+        "auto_compress = false overwrite = true"
     )
 
 

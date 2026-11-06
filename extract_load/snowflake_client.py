@@ -123,10 +123,32 @@ class SnowflakeSettings:
         return f"{self.database}.{RAW_SCHEMA}.{PARQUET_FORMAT}"
 
 
+class _DriverLogFilter(logging.Filter):
+    """Drop driver log records below WARNING, whatever level the driver sets itself."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        from_driver = any(
+            record.name == name or record.name.startswith(f"{name}.") for name in DRIVER_LOGGERS
+        )
+        return not from_driver or record.levelno >= logging.WARNING
+
+
 def quiet_driver_logs() -> None:
-    """Keep driver logs at WARNING so connection details never reach the console."""
+    """Keep driver chatter off the console so connection details never reach it.
+
+    Setting logger levels alone is not enough, because the driver sets levels
+    on its own child loggers. A filter on every root handler catches all of them.
+    """
     for name in DRIVER_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)
+    for handler in logging.getLogger().handlers:
+        if not any(isinstance(existing, _DriverLogFilter) for existing in handler.filters):
+            handler.addFilter(_DriverLogFilter())
+
+
+def redact_local_paths(text: str) -> str:
+    """Replace the home directory, which contains the username, with ~."""
+    return text.replace(str(Path.home()), "~")
 
 
 def connect(settings: SnowflakeSettings) -> Connection:
@@ -149,6 +171,8 @@ def connect(settings: SnowflakeSettings) -> Connection:
             application=APPLICATION_NAME,
             login_timeout=LOGIN_TIMEOUT_SECONDS,
             client_session_keep_alive=False,
+            # No asynchronous queries are used, so always log out cleanly on close.
+            enable_server_session_keep_alive_auto_detection=False,
         )
     except DriverError as exc:
         msg = (
@@ -178,7 +202,7 @@ def describe_driver_error(exc: BaseException) -> str:
     if isinstance(exc, ProgrammingError):
         # raw_msg is the message without the error code the driver prefixes to msg.
         message = getattr(exc, "raw_msg", None) or getattr(exc, "msg", None) or "SQL error"
-        return f"Snowflake rejected a statement (error {errno}): {message}"
+        return f"Snowflake rejected a statement (error {errno}): {redact_local_paths(message)}"
     return f"Snowflake operation failed ({type(exc).__name__}, error {errno})"
 
 
