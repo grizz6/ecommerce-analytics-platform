@@ -11,8 +11,12 @@ orchestration and teardown are added in later milestones.
 - Google Cloud CLI installed and signed in with Application Default
   Credentials (`gcloud auth application-default login`). No key files.
 - A Google Cloud project in BigQuery sandbox mode, with no billing account.
-- A `.env` file copied from `.env.example`, with `GCP_PROJECT_ID` set to that
-  project. `.env` is gitignored and must never be committed.
+- `GCP_PROJECT_ID` set in the current Terminal window, read from the gcloud
+  configuration so it is never typed or saved in the project:
+
+```bash
+export GCP_PROJECT_ID="$(gcloud config get-value project 2>/dev/null)"
+```
 
 ### Cost guardrails
 
@@ -73,9 +77,9 @@ leaves a partial file behind.
 
 | Message | Fix |
 |---|---|
-| `GCP_PROJECT_ID must be set` | Add the project ID to `.env`. |
+| `GCP_PROJECT_ID must be set` | Run the `export GCP_PROJECT_ID=...` command above in this Terminal window. |
 | `Google credentials were not found` | Run `gcloud auth application-default login`. |
-| `... above the per-query limit` | Check the estimate with `make extract-plan`. Raise `BQ_MAX_BYTES_PER_QUERY` in `.env` only if the estimate is expected. |
+| `... above the per-query limit` | Check the estimate with `make extract-plan`. Raise `BQ_MAX_BYTES_PER_QUERY` (for example `export BQ_MAX_BYTES_PER_QUERY=3000000000`) only if the estimate is expected. |
 | `returned no rows` | The daily table does not exist for that date. |
 
 ## Snowflake setup (one time)

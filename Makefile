@@ -10,12 +10,12 @@ SQL_DIRS := $(wildcard transform infra)
 DBT_CI := cd $(DBT_DIR) && $(DBT_CI_ENV) $(UV) run dbt
 
 # Extraction: DATE=YYYY-MM-DD for one day, or START=... END=... for a range.
-# With neither, the full configured range is used. Settings come from .env.
-ENV_FILE := $(if $(wildcard .env),--env-file .env,)
+# With neither, the full configured range is used. Settings come from
+# environment variables; see docs/runbook.md.
 EXTRACT_ARGS := $(if $(DATE),--date $(DATE),$(if $(START),--start $(START) --end $(or $(END),$(START)),))
-EXTRACT := $(UV) run $(ENV_FILE) python -m extract_load.bigquery_extract
-LOAD := $(UV) run $(ENV_FILE) python -m extract_load.snowflake_load
-RECONCILE := $(UV) run $(ENV_FILE) python -m extract_load.reconcile
+EXTRACT := $(UV) run python -m extract_load.bigquery_extract
+LOAD := $(UV) run python -m extract_load.snowflake_load
+RECONCILE := $(UV) run python -m extract_load.reconcile
 
 .PHONY: help setup lint format test fixtures dbt-deps dbt-ci docs secrets clean \
 	extract-plan extract extract-summary load reconcile
