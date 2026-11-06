@@ -9,11 +9,18 @@ DBT_CI_ENV := DBT_PROFILES_DIR=$(CURDIR)/$(DBT_DIR)/ci DBT_DUCKDB_PATH=$(DUCKDB_
 SQL_DIRS := $(wildcard transform infra)
 DBT_CI := cd $(DBT_DIR) && $(DBT_CI_ENV) $(UV) run dbt
 
-.PHONY: help setup lint format test fixtures dbt-deps dbt-ci docs secrets clean
+# Extraction: DATE=YYYY-MM-DD for one day, or START=... END=... for a range.
+# With neither, the full configured range is used. Settings come from .env.
+ENV_FILE := $(if $(wildcard .env),--env-file .env,)
+EXTRACT_ARGS := $(if $(DATE),--date $(DATE),$(if $(START),--start $(START) --end $(or $(END),$(START)),))
+EXTRACT := $(UV) run $(ENV_FILE) python -m extract_load.bigquery_extract
+
+.PHONY: help setup lint format test fixtures dbt-deps dbt-ci docs secrets clean \
+	extract-plan extract extract-summary
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-10s %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
 setup: ## Install pinned dependencies, git hooks and dbt packages
 	$(UV) sync --all-groups --locked
@@ -45,6 +52,15 @@ dbt-ci: fixtures dbt-deps ## Build and test every dbt model on DuckDB fixtures
 docs: dbt-deps ## Generate static dbt docs from the DuckDB target
 	mkdir -p $(DUCKDB_DIR)
 	$(DBT_CI) docs generate --static --target ci
+
+extract-plan: ## Dry-run BigQuery for DATE or START/END and report bytes (free)
+	$(EXTRACT) $(EXTRACT_ARGS) --dry-run
+
+extract: ## Extract DATE or START/END from BigQuery to data/raw/ga4
+	$(EXTRACT) $(EXTRACT_ARGS)
+
+extract-summary: ## Print row and byte totals from the extract manifest
+	$(EXTRACT) --summary
 
 secrets: ## Scan git history and staged changes for secrets (needs gitleaks installed)
 	gitleaks git --redact --no-banner .
