@@ -152,14 +152,16 @@ default.
 | `SNOWFLAKE_RAW_DATABASE` | `RAW` |
 
 To keep both values out of files and shell history, type them at a hidden
-prompt for the current Terminal window only:
+prompt for the current Terminal window only. These commands work in both bash
+and zsh. Paste or type the value and press Enter; nothing is shown while you
+type. Use the account identifier with a hyphen (`ORGNAME-ACCOUNTNAME`).
 
 ```bash
-read -rs "SNOWFLAKE_ACCOUNT?Account identifier: " && export SNOWFLAKE_ACCOUNT && echo
+printf "Account identifier: "; read -rs SNOWFLAKE_ACCOUNT; export SNOWFLAKE_ACCOUNT; echo
 ```
 
 ```bash
-read -rs "SNOWFLAKE_LOADER_PRIVATE_KEY_PASSPHRASE?Loader key passphrase: " && export SNOWFLAKE_LOADER_PRIVATE_KEY_PASSPHRASE && echo
+printf "Loader key passphrase: "; read -rs SNOWFLAKE_LOADER_PRIVATE_KEY_PASSPHRASE; export SNOWFLAKE_LOADER_PRIVATE_KEY_PASSPHRASE; echo
 ```
 
 ### Commands
@@ -190,7 +192,7 @@ matches. Other days are untouched.
 
 | Message | Fix |
 |---|---|
-| `SNOWFLAKE_ACCOUNT must be set` | Run the `read` commands above in this Terminal window. |
+| `SNOWFLAKE_ACCOUNT must be set` | Run the `printf ...; read ...` commands above in this Terminal window. |
 | `private key file is readable by other users` | `chmod 600 ~/.snowflake/keys/*.p8` |
 | `Could not read the private key` | The passphrase is wrong for that key. |
 | `Could not connect to Snowflake (driver error ...)` | Check the account identifier, and that the public key in Snowflake matches the private key. |
