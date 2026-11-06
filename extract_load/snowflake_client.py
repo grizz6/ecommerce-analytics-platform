@@ -1,15 +1,16 @@
 """Snowflake connection settings and key-pair sign-in for the loader.
 
 Every connection value comes from an environment variable. Nothing here logs
-those values: errors name the variable that is wrong, never its contents, and
-connection failures are reported by error code only, because the driver's own
-messages can include the account URL.
+those values: errors name the variable that is wrong, never its contents.
+The driver's own sign-in messages are shown only after the account
+identifier, any Snowflake address and the home directory are redacted.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,22 +32,34 @@ LOGIN_TIMEOUT_SECONDS = 60
 
 DRIVER_LOGGERS = ("snowflake", "botocore", "boto3", "urllib3")
 
-# Driver error codes seen at sign-in, with what to check. Messages never
-# include the account identifier itself.
-CONNECTION_HINTS = {
-    250001: (
-        "Snowflake could not be reached. Check that SNOWFLAKE_ACCOUNT is the account "
-        "identifier in ORGNAME-ACCOUNTNAME form (a hyphen, no dots, no "
-        "'.snowflakecomputing.com', no 'https://'), and that no proxy variable is "
-        "redirecting the connection."
+# The driver reports almost every sign-in failure as error 250001, so hints are
+# chosen from the message text. The first matching fragment wins.
+CONNECTION_HINTS: tuple[tuple[str, str], ...] = (
+    (
+        "authentication failed",
+        "The private key could not be used. The passphrase is most likely wrong for "
+        "this key file: check it with the command in docs/runbook.md, or create a new "
+        "key ('Rotate a key').",
     ),
-    250003: "The connection timed out. Check your network and any proxy settings.",
-    390144: (
-        "Snowflake rejected the key. Check that the user's public key in Snowflake "
-        "matches this private key (see 'Rotate a key' in docs/runbook.md)."
+    (
+        "jwt",
+        "Snowflake rejected the key. The public key on the user does not match this "
+        "private key ('Rotate a key' in docs/runbook.md).",
     ),
-}
+    (
+        "does not exist or not authorized",
+        "Check that the service user exists and that SNOWFLAKE_LOADER_USER is right.",
+    ),
+    (
+        "http request failed",
+        "Snowflake could not be reached. Check that SNOWFLAKE_ACCOUNT is "
+        "ORGNAME-ACCOUNTNAME (a hyphen, no dots, no '.snowflakecomputing.com') and "
+        "that no proxy variable is set.",
+    ),
+    ("timed out", "The connection timed out. Check your network and any proxy settings."),
+)
 DEFAULT_CONNECTION_HINT = "Check the account identifier, user, key and passphrase."
+SNOWFLAKE_ADDRESS = re.compile(r"(https?://)?[\w.-]*snowflakecomputing\.com[^\s'\"]*", re.I)
 
 
 class SnowflakeError(RuntimeError):
@@ -173,6 +186,23 @@ def redact_local_paths(text: str) -> str:
     return text.replace(str(Path.home()), "~")
 
 
+def redact_connection_details(text: str, account: str) -> str:
+    """Remove the account identifier, Snowflake addresses and the home directory."""
+    text = SNOWFLAKE_ADDRESS.sub("<snowflake address>", text)
+    if account:
+        text = re.sub(re.escape(account), "<account>", text, flags=re.IGNORECASE)
+    return redact_local_paths(text).strip().rstrip(".")
+
+
+def connection_hint(reason: str) -> str:
+    """Pick the most specific hint for a sign-in failure message."""
+    lowered = reason.lower()
+    for fragment, hint in CONNECTION_HINTS:
+        if fragment in lowered:
+            return hint
+    return DEFAULT_CONNECTION_HINT
+
+
 def connect(settings: SnowflakeSettings) -> Connection:
     """Open a key-pair authenticated connection as the configured service user."""
     quiet_driver_logs()
@@ -197,8 +227,13 @@ def connect(settings: SnowflakeSettings) -> Connection:
             enable_server_session_keep_alive_auto_detection=False,
         )
     except DriverError as exc:
-        hint = CONNECTION_HINTS.get(exc.errno, DEFAULT_CONNECTION_HINT)
-        msg = f"Could not connect to Snowflake (driver error {exc.errno}). {hint}"
+        reason = redact_connection_details(
+            getattr(exc, "raw_msg", None) or str(exc), settings.account
+        )
+        msg = (
+            f"Could not connect to Snowflake (driver error {exc.errno}): {reason}. "
+            f"{connection_hint(reason)}"
+        )
         raise SnowflakeError(msg) from None
     except (ValueError, TypeError) as exc:
         # Raised when the key cannot be decrypted, for example a wrong passphrase.

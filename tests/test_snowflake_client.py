@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 import snowflake.connector
-from snowflake.connector.errors import OperationalError, ProgrammingError
+from snowflake.connector.errors import DatabaseError, OperationalError, ProgrammingError
 
 from extract_load.config import ConfigError
 from extract_load.logging_utils import configure_logging
@@ -208,25 +208,61 @@ def test_driver_import_logs_are_hidden_in_a_fresh_process() -> None:
 
 
 @pytest.mark.parametrize(
-    ("errno", "expected"),
+    ("driver_message", "expected_hint"),
     [
-        (250001, "ORGNAME-ACCOUNTNAME"),
-        (250003, "timed out"),
-        (390144, "public key"),
-        (999999, "Check the account identifier, user, key and passphrase."),
+        # Messages as raised by snowflake-connector-python 5.2.0, all with errno 250001.
+        ("Failed to login: Authentication failed. Unspecified", "passphrase is most likely wrong"),
+        ("Failed to login: JWT token is invalid.", "does not match this private key"),
+        (
+            "Failed to login: User 'LOADER_SVC' does not exist or not authorized.",
+            "service user exists",
+        ),
+        (
+            "Failed to login: HTTP request failed after retries: login request. tunnel error",
+            "could not be reached",
+        ),
+        ("Something unexpected", "Check the account identifier, user, key and passphrase."),
     ],
 )
-def test_connection_errors_explain_what_to_check(
-    key_file: Path, monkeypatch: pytest.MonkeyPatch, errno: int, expected: str
+def test_connection_errors_show_the_reason_and_a_matching_hint(
+    key_file: Path, monkeypatch: pytest.MonkeyPatch, driver_message: str, expected_hint: str
 ) -> None:
     def failing_connect(**_kwargs: Any) -> None:
-        raise OperationalError(msg=f"https://{ACCOUNT}.snowflakecomputing.com", errno=errno)
+        raise DatabaseError(msg=driver_message, errno=250001, sqlstate="08001")
 
     monkeypatch.setattr(snowflake.connector, "connect", failing_connect)
     with pytest.raises(SnowflakeError) as caught:
         connect(SnowflakeSettings.for_loader(_env(key_file)))
-    assert expected in str(caught.value)
-    assert ACCOUNT not in str(caught.value)
+    message = str(caught.value)
+    assert "driver error 250001" in message
+    assert driver_message.rstrip(".") in message
+    assert expected_hint in message
+
+
+def test_connection_errors_redact_account_and_addresses(
+    key_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def failing_connect(**_kwargs: Any) -> None:
+        raise DatabaseError(
+            msg=(
+                f"Failed to login: HTTP request failed for https://{ACCOUNT.upper()}"
+                f".snowflakecomputing.com:443/session (account {ACCOUNT}) "
+                f"using key {Path.home()}/keys/loader_svc.p8"
+            ),
+            errno=250001,
+        )
+
+    monkeypatch.setattr(snowflake.connector, "connect", failing_connect)
+    with pytest.raises(SnowflakeError) as caught:
+        connect(SnowflakeSettings.for_loader(_env(key_file)))
+    message = str(caught.value)
+    assert ACCOUNT.lower() not in message.lower()
+    # The hint itself mentions the domain; the real address must not appear.
+    assert "snowflakecomputing.com:443" not in message
+    assert str(Path.home()) not in message
+    assert "<snowflake address>" in message
+    assert "<account>" in message
+    assert "~/keys/loader_svc.p8" in message
 
 
 def test_sql_error_messages_hide_the_home_directory() -> None:
