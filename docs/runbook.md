@@ -195,15 +195,23 @@ matches. Other days are untouched.
 | `SNOWFLAKE_ACCOUNT must be set` | Run the `printf ...; read ...` commands above in this Terminal window. |
 | `private key file is readable by other users` | `chmod 600 ~/.snowflake/keys/*.p8` |
 | `Could not read the private key` | The passphrase is wrong for that key. |
-| `driver error 250001` | Snowflake could not be reached. See "Diagnose a connection failure" below. |
-| `driver error 390144` | The key was rejected. The public key on the user does not match this private key. |
+| `Authentication failed. Unspecified` | The passphrase does not unlock the key file. Check it with the passphrase check below, or create a new key. |
+| `JWT token is invalid` | The public key on the user does not match this private key. Set it again (see "Rotate a key"). |
+| `does not exist or not authorized` | The service user is missing or misspelled. Rerun `02_users.sql`. |
+| `HTTP request failed` | Snowflake could not be reached. See "Diagnose a connection failure" below. |
 | `Insufficient privileges` | Rerun `04_grants.sql`. |
 | `does not match its manifest checksum` | Re-extract that day, then load it. |
 
 ### Diagnose a connection failure
 
-Each check prints only a result, never the account identifier, so the output
-is safe to share.
+Each check prints only a result, never the account identifier or passphrase,
+so the output is safe to share.
+
+The passphrase in this Terminal window must unlock the key file:
+
+```bash
+openssl pkey -in ~/.snowflake/keys/loader_svc.p8 -noout -passin env:SNOWFLAKE_LOADER_PRIVATE_KEY_PASSPHRASE 2>/dev/null && echo "passphrase correct" || echo "passphrase wrong"
+```
 
 The identifier must be `ORGNAME-ACCOUNTNAME`: letters, digits and underscores
 on each side of one hyphen. No dots, no `https://`, no `.snowflakecomputing.com`.
