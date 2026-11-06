@@ -195,9 +195,40 @@ matches. Other days are untouched.
 | `SNOWFLAKE_ACCOUNT must be set` | Run the `printf ...; read ...` commands above in this Terminal window. |
 | `private key file is readable by other users` | `chmod 600 ~/.snowflake/keys/*.p8` |
 | `Could not read the private key` | The passphrase is wrong for that key. |
-| `Could not connect to Snowflake (driver error ...)` | Check the account identifier, and that the public key in Snowflake matches the private key. |
+| `driver error 250001` | Snowflake could not be reached. See "Diagnose a connection failure" below. |
+| `driver error 390144` | The key was rejected. The public key on the user does not match this private key. |
 | `Insufficient privileges` | Rerun `04_grants.sql`. |
 | `does not match its manifest checksum` | Re-extract that day, then load it. |
+
+### Diagnose a connection failure
+
+Each check prints only a result, never the account identifier, so the output
+is safe to share.
+
+The identifier must be `ORGNAME-ACCOUNTNAME`: letters, digits and underscores
+on each side of one hyphen. No dots, no `https://`, no `.snowflakecomputing.com`.
+
+```bash
+[[ "$SNOWFLAKE_ACCOUNT" =~ ^[A-Za-z0-9_]+-[A-Za-z0-9_]+$ ]] && echo "format ok" || echo "format wrong"
+```
+
+The account's address must resolve:
+
+```bash
+host "$SNOWFLAKE_ACCOUNT.snowflakecomputing.com" >/dev/null 2>&1 && echo "address resolves" || echo "address does not resolve"
+```
+
+Proxy variables in the shell redirect the connection. List their names only:
+
+```bash
+env | grep -i '_proxy=' | cut -d= -f1
+```
+
+If any are listed and you do not need a proxy, clear them for this window:
+
+```bash
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+```
 
 ## Credit usage checks
 
