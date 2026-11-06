@@ -1,4 +1,6 @@
 import logging
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -126,7 +128,7 @@ def test_quiet_driver_logs() -> None:
     logging.getLogger("snowflake").setLevel(logging.DEBUG)
     quiet_driver_logs()
     for name in DRIVER_LOGGERS:
-        assert logging.getLogger(name).level == logging.WARNING
+        assert logging.getLogger(name).level == logging.ERROR
 
 
 def test_describe_driver_error_shows_sql_errors_only() -> None:
@@ -159,25 +161,72 @@ def test_connect_disables_session_keep_alive_detection(
     assert captured["enable_server_session_keep_alive_auto_detection"] is False
 
 
-def test_driver_info_logs_are_filtered_even_on_child_loggers(
+def test_driver_noise_is_filtered_even_on_child_loggers(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     configure_logging("INFO")
-    child = logging.getLogger("snowflake.connector._common.extras")
+    child = logging.getLogger("snowflake.connector._core")
     child.setLevel(logging.INFO)  # the driver sets its own child logger levels
     quiet_driver_logs()
     quiet_driver_logs()  # calling twice must not stack filters
 
     child.info("pyarrow is installed")
-    child.warning("a real driver warning")
+    child.warning("failed to load region from IMDS")
+    child.error("a real driver error")
     logging.getLogger("extract_load.test").info("our own message")
 
     logged = capsys.readouterr().err
     assert "pyarrow is installed" not in logged
-    assert "a real driver warning" in logged
+    assert "IMDS" not in logged
+    assert "a real driver error" in logged
     assert "our own message" in logged
     root_handler = logging.getLogger().handlers[0]
     assert sum(type(f).__name__ == "_DriverLogFilter" for f in root_handler.filters) == 1
+
+
+def test_driver_import_logs_are_hidden_in_a_fresh_process() -> None:
+    # The driver logs while it is imported, so the filter must be in place first.
+    # A fresh interpreter reproduces a real run, where the driver is not yet loaded.
+    script = (
+        "from extract_load.logging_utils import configure_logging\n"
+        "from extract_load.snowflake_client import quiet_driver_logs\n"
+        "configure_logging('INFO')\n"
+        "quiet_driver_logs()\n"
+        "import snowflake.connector\n"
+        "import logging\n"
+        "logging.getLogger('extract_load').info('still visible')\n"
+    )
+    result = subprocess.run(  # noqa: S603 - fixed arguments, current interpreter
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+    )
+    assert "still visible" in result.stderr
+    assert "snowflake.connector" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("errno", "expected"),
+    [
+        (250001, "ORGNAME-ACCOUNTNAME"),
+        (250003, "timed out"),
+        (390144, "public key"),
+        (999999, "Check the account identifier, user, key and passphrase."),
+    ],
+)
+def test_connection_errors_explain_what_to_check(
+    key_file: Path, monkeypatch: pytest.MonkeyPatch, errno: int, expected: str
+) -> None:
+    def failing_connect(**_kwargs: Any) -> None:
+        raise OperationalError(msg=f"https://{ACCOUNT}.snowflakecomputing.com", errno=errno)
+
+    monkeypatch.setattr(snowflake.connector, "connect", failing_connect)
+    with pytest.raises(SnowflakeError) as caught:
+        connect(SnowflakeSettings.for_loader(_env(key_file)))
+    assert expected in str(caught.value)
+    assert ACCOUNT not in str(caught.value)
 
 
 def test_sql_error_messages_hide_the_home_directory() -> None:
