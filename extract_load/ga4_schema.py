@@ -1,10 +1,23 @@
 """Arrow schema and file layout for the extracted GA4 events.
 
 The schema covers only the columns this project reads from the GA4 BigQuery
-export. It is built from the documented export schema and is provisional until
-milestone M1 checks it against the live table definition (a metadata-only
-lookup that processes zero bytes). Any differences found there are fixed here,
-so the extractor and the synthetic fixtures always share one definition.
+export. It was checked field by field against the live definition of
+bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_20201101 (a
+metadata-only lookup that processes zero bytes). The extractor and the
+synthetic fixtures both use this one definition.
+
+Points worth knowing about the obfuscated sample:
+
+- user_properties.key and three of its value slots, plus device.vendor_id,
+  device.advertising_id and device.mobile_os_hardware_model, are typed
+  INTEGER. In the standard GA4 export they are strings. The obfuscation
+  blanked these fields, so the types are kept exactly as published.
+- traffic_source fields are ordered medium, name, source.
+
+Columns in the export that no model uses are not extracted: privacy_info,
+user_ltv, app_info, stream_id, event_dimensions and
+event_server_timestamp_offset. Leaving them out also lowers the bytes each
+query processes.
 """
 
 from __future__ import annotations
@@ -18,22 +31,40 @@ PARTITION_FILE_NAME = "part-0.parquet"
 EVENT_DATE_FORMAT = "%Y%m%d"
 
 
-def _param_value_type(*, with_set_timestamp: bool = False) -> pa.DataType:
-    fields = [
-        ("string_value", pa.string()),
-        ("int_value", pa.int64()),
-        ("float_value", pa.float64()),
-        ("double_value", pa.float64()),
+EVENT_PARAM_TYPE = pa.struct(
+    [
+        ("key", pa.string()),
+        (
+            "value",
+            pa.struct(
+                [
+                    ("string_value", pa.string()),
+                    ("int_value", pa.int64()),
+                    ("float_value", pa.float64()),
+                    ("double_value", pa.float64()),
+                ]
+            ),
+        ),
     ]
-    if with_set_timestamp:
-        fields.append(("set_timestamp_micros", pa.int64()))
-    return pa.struct(fields)
+)
 
-
-EVENT_PARAM_TYPE = pa.struct([("key", pa.string()), ("value", _param_value_type())])
-
+# Every field is INTEGER in the obfuscated sample; see the module docstring.
 USER_PROPERTY_TYPE = pa.struct(
-    [("key", pa.string()), ("value", _param_value_type(with_set_timestamp=True))]
+    [
+        ("key", pa.int64()),
+        (
+            "value",
+            pa.struct(
+                [
+                    ("string_value", pa.int64()),
+                    ("int_value", pa.int64()),
+                    ("float_value", pa.int64()),
+                    ("double_value", pa.int64()),
+                    ("set_timestamp_micros", pa.int64()),
+                ]
+            ),
+        ),
+    ]
 )
 
 DEVICE_TYPE = pa.struct(
@@ -42,11 +73,11 @@ DEVICE_TYPE = pa.struct(
         ("mobile_brand_name", pa.string()),
         ("mobile_model_name", pa.string()),
         ("mobile_marketing_name", pa.string()),
-        ("mobile_os_hardware_model", pa.string()),
+        ("mobile_os_hardware_model", pa.int64()),
         ("operating_system", pa.string()),
         ("operating_system_version", pa.string()),
-        ("vendor_id", pa.string()),
-        ("advertising_id", pa.string()),
+        ("vendor_id", pa.int64()),
+        ("advertising_id", pa.int64()),
         ("language", pa.string()),
         ("is_limited_ad_tracking", pa.string()),
         ("time_zone_offset_seconds", pa.int64()),
@@ -66,7 +97,7 @@ GEO_TYPE = pa.struct(
 )
 
 TRAFFIC_SOURCE_TYPE = pa.struct(
-    [("name", pa.string()), ("medium", pa.string()), ("source", pa.string())]
+    [("medium", pa.string()), ("name", pa.string()), ("source", pa.string())]
 )
 
 ECOMMERCE_TYPE = pa.struct(
