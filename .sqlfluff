@@ -38,6 +38,11 @@ aliasing = explicit
 [sqlfluff:rules:aliasing.column]
 aliasing = explicit
 
+[sqlfluff:rules:references.keywords]
+# GA4 export column names that are also SQL keywords. They must keep the
+# source names so loading can match columns by name.
+ignore_words = platform,geo
+
 [sqlfluff:rules:ambiguous.column_references]
 group_by_and_order_by_style = explicit
 
