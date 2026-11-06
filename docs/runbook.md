@@ -11,8 +11,12 @@ orchestration and teardown are added in later milestones.
 - Google Cloud CLI installed and signed in with Application Default
   Credentials (`gcloud auth application-default login`). No key files.
 - A Google Cloud project in BigQuery sandbox mode, with no billing account.
-- A `.env` file copied from `.env.example`, with `GCP_PROJECT_ID` set to that
-  project. `.env` is gitignored and must never be committed.
+- `GCP_PROJECT_ID` set in the current Terminal window, read from the gcloud
+  configuration so it is never typed or saved in the project:
+
+```bash
+export GCP_PROJECT_ID="$(gcloud config get-value project 2>/dev/null)"
+```
 
 ### Cost guardrails
 
@@ -73,7 +77,166 @@ leaves a partial file behind.
 
 | Message | Fix |
 |---|---|
-| `GCP_PROJECT_ID must be set` | Add the project ID to `.env`. |
+| `GCP_PROJECT_ID must be set` | Run the `export GCP_PROJECT_ID=...` command above in this Terminal window. |
 | `Google credentials were not found` | Run `gcloud auth application-default login`. |
-| `... above the per-query limit` | Check the estimate with `make extract-plan`. Raise `BQ_MAX_BYTES_PER_QUERY` in `.env` only if the estimate is expected. |
+| `... above the per-query limit` | Check the estimate with `make extract-plan`. Raise `BQ_MAX_BYTES_PER_QUERY` (for example `export BQ_MAX_BYTES_PER_QUERY=3000000000`) only if the estimate is expected. |
 | `returned no rows` | The daily table does not exist for that date. |
+
+## Snowflake setup (one time)
+
+### 1. Create key pairs
+
+Each service user has its own key pair. The private key is encrypted
+(PKCS#8, AES-256) and never leaves `~/.snowflake/keys/`. Each command asks
+for a passphrase; use a different one per key and keep them in a password
+manager.
+
+```bash
+mkdir -p ~/.snowflake/keys && chmod 700 ~/.snowflake/keys
+```
+
+```bash
+openssl genrsa 2048 | openssl pkcs8 -topk8 -v2 aes-256-cbc -inform PEM -out ~/.snowflake/keys/loader_svc.p8
+```
+
+```bash
+openssl genrsa 2048 | openssl pkcs8 -topk8 -v2 aes-256-cbc -inform PEM -out ~/.snowflake/keys/dbt_svc.p8
+```
+
+```bash
+chmod 600 ~/.snowflake/keys/*.p8
+```
+
+Print a public key as one line, ready to paste into Snowsight (asks for that
+key's passphrase):
+
+```bash
+openssl rsa -in ~/.snowflake/keys/loader_svc.p8 -pubout | grep -v "PUBLIC KEY" | tr -d '\n'; echo
+```
+
+### 2. Run the setup scripts
+
+In Snowsight, as a user with ACCOUNTADMIN, run each file in
+`infra/snowflake/` in order: `00`, `01`, `02`, `03`, `04`. For `02_users.sql`,
+paste the file into a worksheet and replace the placeholders there with the
+public keys. Never save real keys into the repository file.
+
+Then enable resource monitor emails: user menu, **Settings**,
+**Notifications**, and turn on email notifications for resource monitors.
+
+### 3. Rotate a key
+
+Snowflake allows two public keys per user. Add the new one, switch the
+private key file, then remove the old one:
+
+```sql
+alter user loader_svc set rsa_public_key_2 = '<NEW_PUBLIC_KEY>';
+alter user loader_svc unset rsa_public_key;
+```
+
+## Load into Snowflake
+
+### Settings
+
+The loader reads these from the environment. Only the first two have no
+default.
+
+| Variable | Default |
+|---|---|
+| `SNOWFLAKE_ACCOUNT` | none (account identifier, `ORGNAME-ACCOUNTNAME`) |
+| `SNOWFLAKE_LOADER_PRIVATE_KEY_PASSPHRASE` | none |
+| `SNOWFLAKE_LOADER_PRIVATE_KEY_PATH` | `~/.snowflake/keys/loader_svc.p8` |
+| `SNOWFLAKE_LOADER_USER` | `LOADER_SVC` |
+| `SNOWFLAKE_LOADER_ROLE` | `LOADER` |
+| `SNOWFLAKE_LOADER_WAREHOUSE` | `LOADING_WH` |
+| `SNOWFLAKE_RAW_DATABASE` | `RAW` |
+
+To keep both values out of files and shell history, type them at a hidden
+prompt for the current Terminal window only. These commands work in both bash
+and zsh. Paste or type the value and press Enter; nothing is shown while you
+type. Use the account identifier with a hyphen (`ORGNAME-ACCOUNTNAME`).
+
+```bash
+printf "Account identifier: "; read -rs SNOWFLAKE_ACCOUNT; export SNOWFLAKE_ACCOUNT; echo
+```
+
+```bash
+printf "Loader key passphrase: "; read -rs SNOWFLAKE_LOADER_PRIVATE_KEY_PASSPHRASE; export SNOWFLAKE_LOADER_PRIVATE_KEY_PASSPHRASE; echo
+```
+
+### Commands
+
+```bash
+make load DATE=2020-11-01
+```
+
+```bash
+make load
+```
+
+```bash
+make reconcile
+```
+
+`make load` replaces each requested day in one transaction and checks the
+rows loaded against the manifest before committing. `make reconcile` exits
+with status 1 if any day is missing, extra or has a different count.
+
+### Rerunning a day
+
+Run `make load DATE=YYYY-MM-DD` again. The day's stage file is replaced, its
+rows are deleted and reloaded, and the transaction commits only if the count
+matches. Other days are untouched.
+
+### Troubleshooting
+
+| Message | Fix |
+|---|---|
+| `SNOWFLAKE_ACCOUNT must be set` | Run the `printf ...; read ...` commands above in this Terminal window. |
+| `private key file is readable by other users` | `chmod 600 ~/.snowflake/keys/*.p8` |
+| `Could not read the private key` | The passphrase is wrong for that key. |
+| `Could not connect to Snowflake (driver error ...)` | Check the account identifier, and that the public key in Snowflake matches the private key. |
+| `Insufficient privileges` | Rerun `04_grants.sql`. |
+| `does not match its manifest checksum` | Re-extract that day, then load it. |
+
+## Credit usage checks
+
+Run in Snowsight as ACCOUNTADMIN. The resource monitor view is close to real
+time; `ACCOUNT_USAGE` views can lag by up to three hours.
+
+Credits used against the project cap:
+
+```sql
+show resource monitors like 'PROJECT_CREDIT_CAP';
+```
+
+Credits per warehouse per day, last 30 days:
+
+```sql
+select
+    to_date(start_time) as usage_date,
+    warehouse_name,
+    round(sum(credits_used), 4) as credits_used
+from snowflake.account_usage.warehouse_metering_history
+where start_time >= dateadd(day, -30, current_timestamp())
+group by usage_date, warehouse_name
+order by usage_date, warehouse_name;
+```
+
+Total credits by service type, including cloud services, last 30 days:
+
+```sql
+select
+    service_type,
+    round(sum(credits_used), 4) as credits_used
+from snowflake.account_usage.metering_daily_history
+where usage_date >= dateadd(day, -30, current_date())
+group by service_type
+order by credits_used desc;
+```
+
+Warehouses that are not suspended right now (should usually be empty):
+
+```sql
+show warehouses;
+```

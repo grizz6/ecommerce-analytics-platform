@@ -50,7 +50,7 @@ without leaving duplicates or partial files.
 ## Consequences
 
 - Dry runs make cost visible before anything runs, and the limits can be
-  tuned in `.env` without code changes.
+  tuned with environment variables without code changes.
 - The schema is fixed to the obfuscated sample, including its INTEGER-typed
   placeholder fields. A schema change in the source makes the cast fail
   loudly instead of writing mismatched files.

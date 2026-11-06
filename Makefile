@@ -10,13 +10,15 @@ SQL_DIRS := $(wildcard transform infra)
 DBT_CI := cd $(DBT_DIR) && $(DBT_CI_ENV) $(UV) run dbt
 
 # Extraction: DATE=YYYY-MM-DD for one day, or START=... END=... for a range.
-# With neither, the full configured range is used. Settings come from .env.
-ENV_FILE := $(if $(wildcard .env),--env-file .env,)
+# With neither, the full configured range is used. Settings come from
+# environment variables; see docs/runbook.md.
 EXTRACT_ARGS := $(if $(DATE),--date $(DATE),$(if $(START),--start $(START) --end $(or $(END),$(START)),))
-EXTRACT := $(UV) run $(ENV_FILE) python -m extract_load.bigquery_extract
+EXTRACT := $(UV) run python -m extract_load.bigquery_extract
+LOAD := $(UV) run python -m extract_load.snowflake_load
+RECONCILE := $(UV) run python -m extract_load.reconcile
 
 .PHONY: help setup lint format test fixtures dbt-deps dbt-ci docs secrets clean \
-	extract-plan extract extract-summary
+	extract-plan extract extract-summary load reconcile
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -61,6 +63,12 @@ extract: ## Extract DATE or START/END from BigQuery to data/raw/ga4
 
 extract-summary: ## Print row and byte totals from the extract manifest
 	$(EXTRACT) --summary
+
+load: ## Load extracted DATE or START/END into Snowflake RAW.GA4.EVENTS
+	$(LOAD) $(EXTRACT_ARGS)
+
+reconcile: ## Compare per-day row counts between the manifest and Snowflake
+	$(RECONCILE)
 
 secrets: ## Scan git history and staged changes for secrets (needs gitleaks installed)
 	gitleaks git --redact --no-banner .
