@@ -31,6 +31,23 @@ LOGIN_TIMEOUT_SECONDS = 60
 
 DRIVER_LOGGERS = ("snowflake", "botocore", "boto3", "urllib3")
 
+# Driver error codes seen at sign-in, with what to check. Messages never
+# include the account identifier itself.
+CONNECTION_HINTS = {
+    250001: (
+        "Snowflake could not be reached. Check that SNOWFLAKE_ACCOUNT is the account "
+        "identifier in ORGNAME-ACCOUNTNAME form (a hyphen, no dots, no "
+        "'.snowflakecomputing.com', no 'https://'), and that no proxy variable is "
+        "redirecting the connection."
+    ),
+    250003: "The connection timed out. Check your network and any proxy settings.",
+    390144: (
+        "Snowflake rejected the key. Check that the user's public key in Snowflake "
+        "matches this private key (see 'Rotate a key' in docs/runbook.md)."
+    ),
+}
+DEFAULT_CONNECTION_HINT = "Check the account identifier, user, key and passphrase."
+
 
 class SnowflakeError(RuntimeError):
     """Raised for connection or load failures, with a message safe to log."""
@@ -124,23 +141,28 @@ class SnowflakeSettings:
 
 
 class _DriverLogFilter(logging.Filter):
-    """Drop driver log records below WARNING, whatever level the driver sets itself."""
+    """Drop driver log records below ERROR, whatever level the driver sets itself.
+
+    The driver's warnings (proxy detection, cloud region lookups) are noise for
+    this tool. Failures still surface through our own error messages.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
         from_driver = any(
             record.name == name or record.name.startswith(f"{name}.") for name in DRIVER_LOGGERS
         )
-        return not from_driver or record.levelno >= logging.WARNING
+        return not from_driver or record.levelno >= logging.ERROR
 
 
 def quiet_driver_logs() -> None:
     """Keep driver chatter off the console so connection details never reach it.
 
+    Must run before the driver is imported, because it logs during import.
     Setting logger levels alone is not enough, because the driver sets levels
     on its own child loggers. A filter on every root handler catches all of them.
     """
     for name in DRIVER_LOGGERS:
-        logging.getLogger(name).setLevel(logging.WARNING)
+        logging.getLogger(name).setLevel(logging.ERROR)
     for handler in logging.getLogger().handlers:
         if not any(isinstance(existing, _DriverLogFilter) for existing in handler.filters):
             handler.addFilter(_DriverLogFilter())
@@ -153,10 +175,10 @@ def redact_local_paths(text: str) -> str:
 
 def connect(settings: SnowflakeSettings) -> Connection:
     """Open a key-pair authenticated connection as the configured service user."""
+    quiet_driver_logs()
     import snowflake.connector  # noqa: PLC0415 - optional dependency group
     from snowflake.connector.errors import Error as DriverError  # noqa: PLC0415
 
-    quiet_driver_logs()
     try:
         return snowflake.connector.connect(
             account=settings.account,
@@ -175,10 +197,8 @@ def connect(settings: SnowflakeSettings) -> Connection:
             enable_server_session_keep_alive_auto_detection=False,
         )
     except DriverError as exc:
-        msg = (
-            f"Could not connect to Snowflake (driver error {exc.errno}). "
-            "Check the account identifier, user, key and passphrase."
-        )
+        hint = CONNECTION_HINTS.get(exc.errno, DEFAULT_CONNECTION_HINT)
+        msg = f"Could not connect to Snowflake (driver error {exc.errno}). {hint}"
         raise SnowflakeError(msg) from None
     except (ValueError, TypeError) as exc:
         # Raised when the key cannot be decrypted, for example a wrong passphrase.
