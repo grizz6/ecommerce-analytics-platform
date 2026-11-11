@@ -1,4 +1,6 @@
 [sqlfluff]
+dialect = snowflake
+templater = jinja
 # Setup scripts are DDL, where indented options under each statement are the
 # readable convention. All other rules from the root configuration apply.
 exclude_rules = layout.indent

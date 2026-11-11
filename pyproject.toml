@@ -16,6 +16,7 @@ dev = [
     "pytest-cov==7.1.0",
     "ruff==0.17.4",
     "sqlfluff==4.5.0",
+    "sqlfluff-templater-dbt==4.5.0",
 ]
 extract = [
     "google-cloud-bigquery==3.47.0",
