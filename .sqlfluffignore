@@ -2,3 +2,5 @@ transform/target/
 transform/dbt_packages/
 transform/logs/
 .venv/
+# Macro files are Jinja. They are checked by compiling the models that use them.
+transform/macros/

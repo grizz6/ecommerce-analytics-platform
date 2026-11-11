@@ -6,7 +6,6 @@ DBT_DIR := transform
 DUCKDB_DIR := $(CURDIR)/data/duckdb
 FIXTURE_DIR := $(CURDIR)/data/fixtures/ga4
 DBT_CI_ENV := DBT_PROFILES_DIR=$(CURDIR)/$(DBT_DIR)/ci DBT_DUCKDB_PATH=$(DUCKDB_DIR)/ci.duckdb
-SQL_DIRS := $(wildcard transform infra)
 DBT_CI := cd $(DBT_DIR) && $(DBT_CI_ENV) $(UV) run dbt
 
 # Extraction: DATE=YYYY-MM-DD for one day, or START=... END=... for a range.
@@ -18,7 +17,7 @@ LOAD := $(UV) run python -m extract_load.snowflake_load
 RECONCILE := $(UV) run python -m extract_load.reconcile
 
 .PHONY: help setup lint format test fixtures dbt-deps dbt-ci docs secrets clean \
-	extract-plan extract extract-summary load reconcile
+	extract-plan extract extract-summary load reconcile dbt-snowflake
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -29,10 +28,11 @@ setup: ## Install pinned dependencies, git hooks and dbt packages
 	$(UV) run pre-commit install
 	$(DBT_CI) deps
 
-lint: ## Run ruff and sqlfluff without changing files
+lint: dbt-deps ## Run ruff and sqlfluff without changing files
 	$(UV) run ruff check .
 	$(UV) run ruff format --check .
-	$(UV) run sqlfluff lint $(SQL_DIRS)
+	$(UV) run sqlfluff lint infra
+	$(UV) run sqlfluff lint transform --templater dbt
 
 format: ## Apply ruff formatting and safe fixes
 	$(UV) run ruff format .
@@ -69,6 +69,9 @@ load: ## Load extracted DATE or START/END into Snowflake RAW.GA4.EVENTS
 
 reconcile: ## Compare per-day row counts between the manifest and Snowflake
 	$(RECONCILE)
+
+dbt-snowflake: ## Build and test dbt on Snowflake (TARGET=dev or prod; profile in ~/.dbt)
+	cd $(DBT_DIR) && $(UV) run dbt deps && $(UV) run dbt build --target $(or $(TARGET),dev)
 
 secrets: ## Scan git history and staged changes for secrets (needs gitleaks installed)
 	gitleaks git --redact --no-banner .

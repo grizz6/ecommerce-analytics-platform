@@ -47,8 +47,9 @@ MIN_USERS = 100
 DEFAULT_START = date(2020, 11, 1)
 DEFAULT_END = date(2020, 12, 13)
 DEFAULT_OUTPUT_DIR = Path("data/fixtures/ga4")
-# Synthetic choice. The real property timezone is confirmed during extraction.
-DEFAULT_PROPERTY_TIMEZONE = "America/Los_Angeles"
+# The public sample's daily tables are UTC days: for event_date 20201201 the
+# first and last event timestamps are 00:00:00 and 23:59:58 UTC.
+DEFAULT_PROPERTY_TIMEZONE = "UTC"
 
 SITE = "https://shop.example-store.test"
 MICROS = 1_000_000

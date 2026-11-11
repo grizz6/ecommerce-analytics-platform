@@ -23,11 +23,20 @@ repos:
         args: ["--fix"]
       - id: ruff-format
 
-  - repo: https://github.com/sqlfluff/sqlfluff
-    rev: 4.5.0
+  # SQLFluff runs from the project environment so the dbt templater can
+  # compile models exactly as dbt does. Needs `make setup` (dbt packages).
+  - repo: local
     hooks:
-      - id: sqlfluff-lint
-        files: ^(transform|infra)/.*\.sql$
+      - id: sqlfluff-setup-scripts
+        name: sqlfluff (Snowflake setup scripts)
+        entry: uv run sqlfluff lint
+        language: system
+        files: ^infra/.*\.sql$
+      - id: sqlfluff-dbt-models
+        name: sqlfluff (dbt models)
+        entry: uv run sqlfluff lint --templater dbt
+        language: system
+        files: ^transform/(models|tests|analyses)/.*\.sql$
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1

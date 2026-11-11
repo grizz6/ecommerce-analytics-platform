@@ -5,6 +5,7 @@ ecommerce_analytics:
   outputs:
     ci:
       type: duckdb
-      path: "{{ env_var('DBT_DUCKDB_PATH', '../data/duckdb/ci.duckdb') }}"
+      # make targets set DBT_DUCKDB_PATH; linting compiles in memory.
+      path: "{{ env_var('DBT_DUCKDB_PATH', ':memory:') }}"
       schema: ci
       threads: 4

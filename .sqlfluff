@@ -1,16 +1,20 @@
 [sqlfluff]
-# Snowflake is the primary warehouse. DuckDB-specific syntax lives only in
-# adapter.dispatch macros, so models stay valid Snowflake SQL.
+# Shared rules. Plain SQL (the Snowflake setup scripts) uses the Snowflake
+# dialect; transform/.sqlfluff switches dbt models to the dbt templater.
 dialect = snowflake
 templater = jinja
 max_line_length = 100
 large_file_skip_byte_limit = 50000
 
 [sqlfluff:templater:jinja]
-# Stubs for ref(), source(), config() and other dbt built-ins, so SQL can be
-# linted without a warehouse connection or credentials.
 apply_dbt_builtins = True
-load_macros_from_path = transform/macros
+
+[sqlfluff:templater:dbt]
+# Used only when linting dbt models with --templater dbt (see the Makefile).
+project_dir = ./transform
+profiles_dir = ./transform/ci
+profile = ecommerce_analytics
+target = ci
 
 [sqlfluff:indentation]
 tab_space_size = 4

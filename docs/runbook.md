@@ -238,6 +238,38 @@ If any are listed and you do not need a proxy, clear them for this window:
 unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
 ```
 
+## Run dbt on Snowflake
+
+One-time setup: copy the profile template.
+
+```bash
+mkdir -p ~/.dbt && cp transform/profiles.example.yml ~/.dbt/profiles.yml
+```
+
+In each new Terminal window, set the two values that have no default:
+
+```bash
+read -rsp "Account identifier: " SNOWFLAKE_ACCOUNT && export SNOWFLAKE_ACCOUNT && echo
+```
+
+```bash
+read -rsp "dbt key passphrase: " SNOWFLAKE_DBT_PRIVATE_KEY_PASSPHRASE && export SNOWFLAKE_DBT_PRIVATE_KEY_PASSPHRASE && echo
+```
+
+Build and test everything in the development schemas (`DEV_STAGING`,
+`DEV_INTERMEDIATE` and so on):
+
+```bash
+make dbt-snowflake
+```
+
+Use `TARGET=prod` to build the production schemas (`STAGING`, `MARTS` and so
+on). After changing how `event_key` is built, run once with a full refresh:
+
+```bash
+cd transform && uv run dbt build --target dev --full-refresh
+```
+
 ## Credit usage checks
 
 Run in Snowsight as ACCOUNTADMIN. The resource monitor view is close to real

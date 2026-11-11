@@ -1,0 +1,8 @@
+[sqlfluff]
+# dbt models are compiled by dbt itself against the credential-free DuckDB CI
+# profile, then linted as DuckDB SQL, so every cross-database macro is
+# expanded exactly as dbt does. The templater cannot be set in a subfolder,
+# so lint commands pass --templater dbt for this folder (see the Makefile).
+# The Snowflake versions of the macros are exercised by running the project
+# on Snowflake.
+dialect = duckdb
