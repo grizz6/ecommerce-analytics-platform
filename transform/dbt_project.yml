@@ -16,6 +16,30 @@ clean-targets:
   - dbt_packages
 
 vars:
-  # Business reporting timezone. Event timestamps stay in UTC; daily reporting
-  # dates are derived in this timezone (US East Coast).
+  # Business reporting time zone (US East Coast). Event timestamps stay in
+  # UTC; reporting dates are derived in this time zone.
   reporting_timezone: America/New_York
+  # The GA4 daily tables are UTC days, so the first and last East Coast dates
+  # are partial. Daily KPIs, trends and retention use complete days only.
+  first_complete_reporting_date: "2020-11-01"
+  last_complete_reporting_date: "2021-01-30"
+  # Incremental runs on Snowflake reprocess this many days before the latest
+  # loaded GA4 date, so reloaded or late-arriving days are merged again.
+  event_lookback_days: 3
+
+models:
+  ecommerce_analytics:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: table
+
+seeds:
+  ecommerce_analytics:
+    +schema: reference
+    ga4_source_categories:
+      +column_types:
+        source: varchar
+        source_category: varchar

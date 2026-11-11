@@ -1,0 +1,207 @@
+version: 2
+
+models:
+  - name: stg_ga4__events
+    description: >
+      One row per GA4 event, deduplicated, with typed columns. The export has
+      no event identifier and contains exact duplicate rows, so event_key
+      fingerprints user, timestamp, event name, bundle sequence and all event
+      parameters, and one row is kept per key. Incremental on Snowflake (merge
+      on event_key with a lookback window); a table on DuckDB.
+    columns:
+      - name: event_key
+        description: Surrogate key fingerprinting the event, including its parameters.
+        data_tests: [unique, not_null]
+      - name: event_date
+        description: GA4 event date. The sample's daily tables are UTC days.
+        data_tests: [not_null]
+      - name: event_ts_utc
+        description: Event time in UTC.
+        data_tests: [not_null]
+      - name: reporting_date
+        description: Event date in the reporting time zone (var reporting_timezone, US East Coast).
+        data_tests: [not_null]
+      - name: event_ts_local
+        description: Event time in the reporting time zone.
+      - name: event_timestamp_micros
+        description: Original event timestamp, microseconds since the Unix epoch.
+      - name: event_bundle_sequence_id
+        description: Sequence of the batch the event was sent in.
+      - name: event_name
+        description: GA4 event name, for example page_view or purchase.
+        data_tests: [not_null]
+      - name: user_pseudo_id
+        description: Pseudonymous browser identifier. Raw identifier; never published.
+        data_tests: [not_null]
+      - name: user_id
+        description: Signed-in user identifier. Always empty in the public sample.
+      - name: user_first_touch_ts_utc
+        description: When GA4 first saw this user, in UTC.
+      - name: ga_session_id
+        description: GA4 session id (session start, seconds since the epoch). Unique per user only.
+      - name: ga_session_number
+        description: Count of this user's sessions, starting at 1.
+      - name: session_key
+        description: Surrogate key for user_pseudo_id and ga_session_id. Null when the event has no session id.
+      - name: page_location
+        description: Full page URL.
+      - name: page_title
+        description: Page title.
+      - name: page_referrer
+        description: Referring URL.
+      - name: is_entrance
+        description: True for the first page view of a session.
+      - name: engagement_time_msec
+        description: Engagement time reported with the event, in milliseconds.
+      - name: is_session_engaged
+        description: True when GA4 marked the session as engaged at the time of the event.
+      - name: event_source
+        description: Traffic source parameter on the event, used to attribute the session.
+      - name: event_medium
+        description: Traffic medium parameter on the event.
+      - name: event_campaign
+        description: Campaign parameter on the event.
+      - name: first_touch_source
+        description: Source of the user's first visit (traffic_source.source). User-level, not session-level.
+      - name: first_touch_medium
+        description: Medium of the user's first visit.
+      - name: first_touch_campaign
+        description: Campaign of the user's first visit (traffic_source.name).
+      - name: device_category
+        description: desktop, mobile or tablet.
+      - name: device_operating_system
+        description: Operating system.
+      - name: device_browser
+        description: Browser.
+      - name: device_language
+        description: Browser language.
+      - name: geo_continent
+        description: Continent.
+      - name: geo_sub_continent
+        description: Sub-continent.
+      - name: geo_country
+        description: Country.
+      - name: geo_region
+        description: Region. Often "(data deleted)" in the sample.
+      - name: geo_city
+        description: City. Often empty or "(data deleted)" in the sample.
+      - name: platform
+        description: Always WEB in this dataset.
+      - name: transaction_id
+        description: Order identifier on purchase events. Can be missing, "(not set)" or repeated.
+      - name: purchase_revenue_usd
+        description: Purchase revenue in USD, including tax and shipping.
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+              config:
+                where: "purchase_revenue_usd is not null"
+      - name: tax_value_usd
+        description: Tax in USD.
+      - name: shipping_value_usd
+        description: Shipping in USD.
+      - name: refund_value_usd
+        description: Refund value in USD.
+      - name: total_item_quantity
+        description: Total units on the event.
+      - name: unique_items
+        description: Distinct items on the event.
+      - name: event_value_in_usd
+        description: GA4 event value in USD.
+      - name: item_count
+        description: Number of entries in the items array.
+      - name: event_params
+        description: Raw event parameters, kept for stg_ga4__event_params.
+      - name: items
+        description: Raw items array, kept for stg_ga4__items.
+      - name: _source_file
+        description: File the row was loaded from.
+      - name: _loaded_at
+        description: When the row was loaded.
+
+  - name: stg_ga4__event_params
+    description: Every event parameter in long format, one row per event and parameter key.
+    columns:
+      - name: event_param_key
+        description: Surrogate key for event_key and param_key.
+        data_tests: [unique, not_null]
+      - name: event_key
+        description: The event the parameter belongs to.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_ga4__events')
+                field: event_key
+      - name: event_name
+        description: Name of the event.
+      - name: event_date
+        description: GA4 event date (UTC day).
+      - name: param_key
+        description: Parameter name.
+        data_tests: [not_null]
+      - name: string_value
+        description: Value when stored as text.
+      - name: int_value
+        description: Value when stored as an integer.
+      - name: float_value
+        description: Value when stored as a float.
+      - name: double_value
+        description: Value when stored as a double.
+      - name: param_value
+        description: The value as text, whichever slot held it.
+
+  - name: stg_ga4__items
+    description: One row per item per event, for events that carry items.
+    columns:
+      - name: event_item_key
+        description: Surrogate key for event_key and item_index.
+        data_tests: [unique, not_null]
+      - name: event_key
+        description: The event the item belongs to.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_ga4__events')
+                field: event_key
+      - name: item_index
+        description: Zero-based position of the item in the event's items array.
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+      - name: event_name
+        description: Name of the event.
+      - name: event_date
+        description: GA4 event date (UTC day).
+      - name: event_ts_utc
+        description: Event time in UTC.
+      - name: reporting_date
+        description: Event date in the reporting time zone.
+      - name: user_pseudo_id
+        description: Pseudonymous browser identifier. Raw identifier; never published.
+      - name: session_key
+        description: Session the event belongs to.
+      - name: transaction_id
+        description: Order identifier on purchase events.
+      - name: item_id
+        description: Product identifier.
+      - name: item_name
+        description: Product name.
+      - name: item_brand
+        description: Brand.
+      - name: item_variant
+        description: Variant.
+      - name: item_category
+        description: Top-level product category.
+      - name: price_usd
+        description: Unit price in USD.
+      - name: quantity
+        description: Units.
+      - name: item_revenue_usd
+        description: Item revenue in USD, on purchase events.
+      - name: coupon
+        description: Coupon code, if any.

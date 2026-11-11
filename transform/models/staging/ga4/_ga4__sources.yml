@@ -1,0 +1,45 @@
+version: 2
+
+sources:
+  - name: ga4
+    description: >
+      Google Analytics 4 obfuscated sample e-commerce export
+      (bigquery-public-data.ga4_obfuscated_sample_ecommerce), 2020-11-01 to
+      2021-01-31. One row per event. Values are deliberately obfuscated by
+      Google: some fields hold placeholders such as "(data deleted)",
+      "<Other>" or an empty string. These are kept as published and documented
+      as a limitation, never corrected.
+    # On Snowflake the loader writes RAW.GA4.EVENTS. On DuckDB the same daily
+    # Parquet files are read directly, with the two metadata columns the
+    # Snowflake loader adds, so every model sees identical columns. Hive
+    # partitioning is off so the event_date=YYYYMMDD folder names do not
+    # replace the text event_date column inside the files with a number.
+    database: "{{ var('raw_database', 'RAW') if target.type == 'snowflake' else target.database }}"
+    schema: GA4
+    config:
+      loaded_at_field: _loaded_at
+      freshness:
+        # The dataset is static and historical, so freshness is not a
+        # meaningful signal here. The thresholds show how a live source would
+        # be monitored, and are not part of dbt build.
+        warn_after: {count: 1, period: day}
+        error_after: {count: 7, period: day}
+    tables:
+      - name: events
+        identifier: EVENTS
+        description: One row per GA4 event, exactly as exported, plus load metadata.
+        config:
+          meta:
+            external_location: >-
+              (select *, filename as _source_file, current_timestamp as _loaded_at
+              from read_parquet('{{ env_var('GA4_PARQUET_GLOB', '../data/fixtures/ga4/*/part-0.parquet') }}',
+              filename = true, hive_partitioning = false))
+        columns:
+          - name: event_date
+            description: GA4 event date, YYYYMMDD. The sample's daily tables are UTC days.
+          - name: event_timestamp
+            description: Event time in microseconds since the Unix epoch, UTC.
+          - name: _source_file
+            description: Stage path (Snowflake) or file path (DuckDB) the row was loaded from.
+          - name: _loaded_at
+            description: When the row was loaded.
