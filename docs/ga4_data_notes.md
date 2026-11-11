@@ -1,8 +1,8 @@
 # GA4 sample: data notes
 
 What this project found in `bigquery-public-data.ga4_obfuscated_sample_ecommerce`
-and how the models handle it. Numbers marked *pending* are filled in after the
-profiling queries below are run on Snowflake.
+and how the models handle it. Counts come from the profiling query below, run
+on Snowflake after the first full dbt build (dev target).
 
 ## Time zones
 
@@ -19,8 +19,11 @@ profiling queries below are run on Snowflake.
 
 - The export has no event identifier. `event_key` fingerprints user,
   timestamp, event name, bundle sequence and all parameters.
-- Exact duplicate rows: *pending* (rows in RAW minus rows in
-  `stg_ga4__events`).
+- Exact duplicate rows in the real data: **none**. RAW and
+  `stg_ga4__events` both hold 4,295,584 rows. Deduplication stays in place
+  because a reload or a future export could introduce duplicates; the
+  synthetic CI fixtures contain deliberate duplicates so the logic is still
+  tested.
 
 ## Traffic fields available
 
@@ -30,8 +33,8 @@ profiling queries below are run on Snowflake.
 | `event_params` `source`, `medium`, `campaign` | Event | Present on some events; the first one in a session sets the session's source. |
 | `collected_traffic_source`, `session_traffic_source_last_click` | | Not in this export; added to GA4 exports in 2023. |
 
-Sessions without any event-level traffic parameter are `(direct) / (none)`.
-Share of sessions without traffic parameters: *pending*.
+Sessions without any event-level traffic parameter are `(direct) / (none)`:
+132,339 of 360,129 sessions (36.7%).
 
 ## Obfuscation
 
@@ -44,12 +47,27 @@ Values are kept as published and never corrected. Observed placeholders:
 | Empty string | Source, medium, city | Channel becomes Unassigned |
 | INTEGER-typed blank fields | `user_properties`, `device.vendor_id`, `device.advertising_id` | Not used by any model |
 
-Share of sessions in Unassigned: *pending*.
+Sessions in the Unassigned channel: 31,771 of 360,129 (8.8%). Channel results
+should be read with this share in mind.
 
 ## Sessions without a session id
 
 Events without `ga_session_id` cannot be placed in a session. They remain in
-`stg_ga4__events` and are excluded from session models. Count: *pending*.
+`stg_ga4__events` and are excluded from session models. In the real data
+every event has a session id (0 events without one), so no event is lost. The
+CI fixtures include such events to test the exclusion.
+
+## Summary
+
+| Measure | Value |
+|---|---|
+| Events (RAW and staged) | 4,295,584 |
+| Exact duplicate events | 0 |
+| Events without a session id | 0 |
+| Sessions | 360,129 |
+| Average events per session | 11.9 |
+| Direct sessions | 132,339 (36.7%) |
+| Unassigned sessions | 31,771 (8.8%) |
 
 ## Profiling queries
 
