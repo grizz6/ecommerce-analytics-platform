@@ -1,0 +1,138 @@
+version: 2
+
+models:
+  - name: int_ga4__sessions
+    description: >
+      One row per session, keyed on user_pseudo_id and ga_session_id. Events
+      without a session id are excluded. Device and location come from the
+      first event, the landing page from the first page_view, and source,
+      medium and campaign from the first event carrying traffic parameters,
+      defaulting to (direct) / (none). The channel group applies the GA4
+      default channel group rules (see docs/decisions/0004-channel-grouping.md).
+    columns:
+      - name: session_key
+        description: Surrogate key for user_pseudo_id and ga_session_id.
+        data_tests: [unique, not_null]
+      - name: user_pseudo_id
+        description: Pseudonymous browser identifier. Raw identifier; never published.
+        data_tests: [not_null]
+      - name: ga_session_id
+        description: GA4 session id.
+        data_tests: [not_null]
+      - name: ga_session_number
+        description: Count of this user's sessions, starting at 1.
+      - name: is_first_session
+        description: True when ga_session_number is 1.
+      - name: session_date
+        description: Session start date in the reporting time zone.
+        data_tests: [not_null]
+      - name: session_start_ts_utc
+        description: First event time in the session, UTC.
+        data_tests: [not_null]
+      - name: session_end_ts_utc
+        description: Last event time in the session, UTC.
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= session_start_ts_utc"
+      - name: session_start_ts_local
+        description: First event time in the reporting time zone.
+      - name: event_count
+        description: Events in the session.
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
+      - name: page_views
+        description: page_view events in the session.
+      - name: is_engaged
+        description: True when any event in the session was marked as engaged (GA4 engaged session).
+      - name: engagement_time_msec
+        description: Total engagement time reported in the session, in milliseconds.
+      - name: landing_page
+        description: page_location of the first page_view. Null when the session has no page_view.
+      - name: device_category
+        description: desktop, mobile or tablet, from the first event.
+      - name: device_operating_system
+        description: Operating system, from the first event.
+      - name: device_browser
+        description: Browser, from the first event.
+      - name: geo_country
+        description: Country, from the first event.
+      - name: geo_region
+        description: Region, from the first event.
+      - name: geo_city
+        description: City, from the first event.
+      - name: session_source
+        description: Source of the session; (direct) when no event carried one.
+      - name: session_medium
+        description: Medium of the session; (none) when no event carried one.
+      - name: session_campaign
+        description: Campaign of the session; (direct) when no event carried one.
+      - name: session_channel_group
+        description: GA4 default channel group for the session's source, medium and campaign.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - Direct
+                  - Cross-network
+                  - Paid Shopping
+                  - Paid Search
+                  - Paid Social
+                  - Paid Video
+                  - Display
+                  - Paid Other
+                  - Organic Shopping
+                  - Organic Social
+                  - Organic Video
+                  - Organic Search
+                  - Referral
+                  - Email
+                  - Affiliates
+                  - Audio
+                  - SMS
+                  - Mobile Push Notifications
+                  - Unassigned
+
+  - name: int_ga4__session_funnel
+    description: >
+      One row per session with a flag and first timestamp for each purchase
+      funnel step. Steps are recorded as logged; GA4 does not guarantee that a
+      purchase has its earlier steps.
+    columns:
+      - name: session_key
+        description: The session.
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_ga4__sessions')
+                field: session_key
+      - name: has_view_item
+        description: The session logged at least one view_item.
+      - name: has_add_to_cart
+        description: The session logged at least one add_to_cart.
+      - name: has_begin_checkout
+        description: The session logged at least one begin_checkout.
+      - name: has_add_shipping_info
+        description: The session logged at least one add_shipping_info.
+      - name: has_add_payment_info
+        description: The session logged at least one add_payment_info.
+      - name: has_purchase
+        description: The session logged at least one purchase.
+      - name: first_view_item_ts_utc
+        description: First view_item time, UTC.
+      - name: first_add_to_cart_ts_utc
+        description: First add_to_cart time, UTC.
+      - name: first_begin_checkout_ts_utc
+        description: First begin_checkout time, UTC.
+      - name: first_add_shipping_info_ts_utc
+        description: First add_shipping_info time, UTC.
+      - name: first_add_payment_info_ts_utc
+        description: First add_payment_info time, UTC.
+      - name: first_purchase_ts_utc
+        description: First purchase time, UTC.
