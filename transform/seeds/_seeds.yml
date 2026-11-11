@@ -1,0 +1,19 @@
+version: 2
+
+seeds:
+  - name: ga4_source_categories
+    description: >
+      Source categories used by the GA4 default channel group rules (search,
+      social, video, shopping). A subset of Google's published list,
+      covering common sources; unlisted sources have no category.
+    columns:
+      - name: source
+        description: Traffic source, lower case.
+        data_tests: [unique, not_null]
+      - name: source_category
+        description: SEARCH, SOCIAL, VIDEO or SHOPPING.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [SEARCH, SOCIAL, VIDEO, SHOPPING]
