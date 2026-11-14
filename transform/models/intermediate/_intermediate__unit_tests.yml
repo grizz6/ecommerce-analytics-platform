@@ -1,0 +1,67 @@
+version: 2
+
+unit_tests:
+  - name: attribution_credits_follow_each_model
+    description: >
+      Order A has four sessions in its 30-day window (Organic Search, Email,
+      Direct, Direct) and one session 35 days earlier that must be ignored.
+      First touch credits Organic Search; last non-direct credits Email, not
+      the later Direct sessions; linear gives each touchpoint a quarter.
+      Order B has only Direct sessions, so last non-direct falls back to the
+      latest one. Order C has one session in the window and one after the
+      order, which must be ignored; that session gets all credit.
+    model: int_ga4__order_touchpoints
+    given:
+      - input: ref('int_ga4__orders')
+        rows:
+          - {order_key: A, user_pseudo_id: u1, order_ts_utc: "2020-12-10 12:00:00", order_date: "2020-12-10", revenue_usd: 100}
+          - {order_key: B, user_pseudo_id: u2, order_ts_utc: "2020-12-10 12:00:00", order_date: "2020-12-10", revenue_usd: 50}
+          - {order_key: C, user_pseudo_id: u3, order_ts_utc: "2020-12-10 12:00:00", order_date: "2020-12-10", revenue_usd: 20}
+      - input: ref('int_ga4__sessions')
+        rows:
+          - {session_key: a_too_old, user_pseudo_id: u1, session_start_ts_utc: "2020-11-05 12:00:00", session_channel_group: Referral}
+          - {session_key: a1, user_pseudo_id: u1, session_start_ts_utc: "2020-11-15 09:00:00", session_channel_group: Organic Search}
+          - {session_key: a2, user_pseudo_id: u1, session_start_ts_utc: "2020-12-01 09:00:00", session_channel_group: Email}
+          - {session_key: a3, user_pseudo_id: u1, session_start_ts_utc: "2020-12-05 09:00:00", session_channel_group: Direct}
+          - {session_key: a4, user_pseudo_id: u1, session_start_ts_utc: "2020-12-10 11:50:00", session_channel_group: Direct}
+          - {session_key: b1, user_pseudo_id: u2, session_start_ts_utc: "2020-12-01 09:00:00", session_channel_group: Direct}
+          - {session_key: b2, user_pseudo_id: u2, session_start_ts_utc: "2020-12-10 11:00:00", session_channel_group: Direct}
+          - {session_key: c1, user_pseudo_id: u3, session_start_ts_utc: "2020-12-09 09:00:00", session_channel_group: Paid Search}
+          - {session_key: c_after_order, user_pseudo_id: u3, session_start_ts_utc: "2020-12-10 13:00:00", session_channel_group: Organic Search}
+    expect:
+      rows:
+        - {order_key: A, session_key: a1, channel_group: Organic Search, touch_position: 1, touch_count: 4, first_touch_credit: 1, last_non_direct_credit: 0, linear_credit: 0.25}
+        - {order_key: A, session_key: a2, channel_group: Email, touch_position: 2, touch_count: 4, first_touch_credit: 0, last_non_direct_credit: 1, linear_credit: 0.25}
+        - {order_key: A, session_key: a3, channel_group: Direct, touch_position: 3, touch_count: 4, first_touch_credit: 0, last_non_direct_credit: 0, linear_credit: 0.25}
+        - {order_key: A, session_key: a4, channel_group: Direct, touch_position: 4, touch_count: 4, first_touch_credit: 0, last_non_direct_credit: 0, linear_credit: 0.25}
+        - {order_key: B, session_key: b1, channel_group: Direct, touch_position: 1, touch_count: 2, first_touch_credit: 1, last_non_direct_credit: 0, linear_credit: 0.5}
+        - {order_key: B, session_key: b2, channel_group: Direct, touch_position: 2, touch_count: 2, first_touch_credit: 0, last_non_direct_credit: 1, linear_credit: 0.5}
+        - {order_key: C, session_key: c1, channel_group: Paid Search, touch_position: 1, touch_count: 1, first_touch_credit: 1, last_non_direct_credit: 1, linear_credit: 1}
+
+  - name: sessions_take_landing_page_source_and_channel_from_their_events
+    description: >
+      Session 1 starts with session_start (no traffic parameters), then a
+      landing page_view from facebook.com / referral, a second page_view and
+      an engaged event. Its source comes from the first event that carries
+      one, its landing page from the first page_view, and facebook.com is a
+      social source, so the channel is Organic Social, not Referral. Session 2
+      has no traffic parameters, so it is (direct) / (none) and Direct.
+    model: int_ga4__sessions
+    given:
+      - input: ref('stg_ga4__events')
+        rows:
+          - {session_key: s1, event_key: e1, user_pseudo_id: u1, ga_session_id: 100, ga_session_number: 1, event_name: session_start, event_ts_utc: "2020-12-01 10:00:00", event_ts_local: "2020-12-01 05:00:00", reporting_date: "2020-12-01", is_session_engaged: false, device_category: mobile, geo_country: Canada}
+          - {session_key: s1, event_key: e2, user_pseudo_id: u1, ga_session_id: 100, ga_session_number: 1, event_name: page_view, event_ts_utc: "2020-12-01 10:00:01", event_ts_local: "2020-12-01 05:00:01", reporting_date: "2020-12-01", page_location: "https://shop.example/home", event_source: facebook.com, event_medium: referral, event_campaign: (referral), is_session_engaged: false, device_category: mobile, geo_country: Canada}
+          - {session_key: s1, event_key: e3, user_pseudo_id: u1, ga_session_id: 100, ga_session_number: 1, event_name: page_view, event_ts_utc: "2020-12-01 10:01:00", event_ts_local: "2020-12-01 05:01:00", reporting_date: "2020-12-01", page_location: "https://shop.example/bags", is_session_engaged: true, device_category: mobile, geo_country: Canada}
+          - {session_key: s1, event_key: e4, user_pseudo_id: u1, ga_session_id: 100, ga_session_number: 1, event_name: user_engagement, event_ts_utc: "2020-12-01 10:02:00", event_ts_local: "2020-12-01 05:02:00", reporting_date: "2020-12-01", is_session_engaged: true, engagement_time_msec: 30000, device_category: mobile, geo_country: Canada}
+          - {session_key: s2, event_key: e5, user_pseudo_id: u1, ga_session_id: 200, ga_session_number: 2, event_name: session_start, event_ts_utc: "2020-12-08 15:00:00", event_ts_local: "2020-12-08 10:00:00", reporting_date: "2020-12-08", is_session_engaged: false, device_category: desktop, geo_country: Canada}
+          - {session_key: s2, event_key: e6, user_pseudo_id: u1, ga_session_id: 200, ga_session_number: 2, event_name: page_view, event_ts_utc: "2020-12-08 15:00:02", event_ts_local: "2020-12-08 10:00:02", reporting_date: "2020-12-08", page_location: "https://shop.example/sale", is_session_engaged: false, device_category: desktop, geo_country: Canada}
+          - {session_key: null, event_key: e7, user_pseudo_id: u1, event_name: page_view, event_ts_utc: "2020-12-08 16:00:00", reporting_date: "2020-12-08", page_location: "https://shop.example/no-session"}
+      - input: ref('ga4_source_categories')
+        rows:
+          - {source: facebook.com, source_category: SOCIAL}
+          - {source: google, source_category: SEARCH}
+    expect:
+      rows:
+        - {session_key: s1, session_date: "2020-12-01", is_first_session: true, event_count: 4, page_views: 2, is_engaged: true, engagement_time_msec: 30000, landing_page: "https://shop.example/home", device_category: mobile, session_source: facebook.com, session_medium: referral, session_channel_group: Organic Social}
+        - {session_key: s2, session_date: "2020-12-08", is_first_session: false, event_count: 2, page_views: 1, is_engaged: false, engagement_time_msec: 0, landing_page: "https://shop.example/sale", device_category: desktop, session_source: (direct), session_medium: (none), session_channel_group: Direct}

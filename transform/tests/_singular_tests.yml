@@ -1,0 +1,13 @@
+version: 2
+
+data_tests:
+  - name: assert_attribution_credit_matches_order_revenue
+    description: >
+      Under first-touch, last non-direct and linear attribution, credit per
+      order sums to the order's revenue, and every order has touchpoints.
+  - name: assert_week_zero_retention_is_complete
+    description: Week 0 retention equals 100 percent for every cohort.
+  - name: warn_funnel_steps_logged_out_of_order
+    description: >
+      Warning only. Counts sessions that logged a funnel step without the
+      previous one, which GA4 does not prevent.
