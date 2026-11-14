@@ -50,6 +50,28 @@ Values are kept as published and never corrected. Observed placeholders:
 Sessions in the Unassigned channel: 31,771 of 360,129 (8.8%). Channel results
 should be read with this share in mind.
 
+## Orders and funnel (Snowflake, dev target)
+
+| Measure | Value |
+|---|---|
+| Orders | 5,357 |
+| Orders without a valid transaction id (missing, empty or `(not set)`) | 906 (16.9%) |
+| Transactions logged more than once (counted as one order) | 326 (6.1%) |
+| Revenue on complete days | $339,351 |
+| Overall session conversion rate (complete days) | 1.35% |
+| Sessions with a funnel step logged without the previous step | 5,166 (1.4% of sessions) |
+
+Orders without a valid transaction id are kept as their own orders so their
+revenue is not lost; a repeated transaction id would otherwise double count
+revenue. Sessions that skip funnel steps are reported by a warning-level test
+on every run.
+
+Attributed revenue equals order revenue under all three attribution models.
+An early run on Snowflake showed linear attribution $0.03 short in total:
+Snowflake's fixed-point division kept six decimals, so a third of an order was
+0.333333. Linear credit is now computed in double precision, and the tests
+compare per-order and total revenue to well under a cent.
+
 ## Sessions without a session id
 
 Events without `ga_session_id` cannot be placed in a session. They remain in
