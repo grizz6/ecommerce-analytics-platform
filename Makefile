@@ -17,7 +17,8 @@ LOAD := $(UV) run python -m extract_load.snowflake_load
 RECONCILE := $(UV) run python -m extract_load.reconcile
 
 .PHONY: help setup lint format test fixtures dbt-deps dbt-ci docs docs-check secrets clean \
-	extract-plan extract extract-summary load reconcile dbt-snowflake
+	extract-plan extract extract-summary load reconcile dbt-snowflake \
+	dag-test airflow-env airflow-start airflow-test airflow-stop
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -73,6 +74,41 @@ load: ## Load extracted DATE or START/END into Snowflake RAW.GA4.EVENTS
 
 reconcile: ## Compare per-day row counts between the manifest and Snowflake
 	$(RECONCILE)
+
+# Airflow (M5). Versions match orchestration/Dockerfile (Astro Runtime 3.3-12).
+AIRFLOW_VERSION := 3.3.2
+COSMOS_VERSION := 1.16.0
+AIRFLOW_VENV := $(CURDIR)/.venv-airflow
+AIRFLOW_CONSTRAINTS := https://raw.githubusercontent.com/apache/airflow/constraints-$(AIRFLOW_VERSION)/constraints-3.12.txt
+# Placeholder connection: DAG tests only render the dbt task graph; they never connect.
+DAG_TEST_ENV := AIRFLOW_HOME=$(CURDIR)/data/airflow-test \
+	AIRFLOW__CORE__LOAD_EXAMPLES=False \
+	PROJECT_ROOT=$(CURDIR) \
+	EL_PYTHON=$(CURDIR)/.venv/bin/python \
+	DBT_EXECUTABLE=$(CURDIR)/.venv/bin/dbt \
+	AIRFLOW_CONN_SNOWFLAKE_DBT='{"conn_type":"snowflake","login":"DBT_SVC","password":"not-used","schema":"ANALYTICS","extra":{"account":"placeholder-account","database":"ANALYTICS","warehouse":"TRANSFORMING_WH","role":"TRANSFORMER","private_key_file":"/nonexistent/dbt_svc.p8"}}'
+
+dag-test: dbt-deps ## Run the Airflow DAG integrity tests without Docker
+	$(UV) venv -q --allow-existing -p 3.12 $(AIRFLOW_VENV)
+	$(UV) pip install -q -p $(AIRFLOW_VENV) "apache-airflow==$(AIRFLOW_VERSION)" \
+		"astronomer-cosmos==$(COSMOS_VERSION)" pytest --constraint $(AIRFLOW_CONSTRAINTS)
+	mkdir -p $(CURDIR)/data/airflow-test
+	$(DAG_TEST_ENV) $(AIRFLOW_VENV)/bin/airflow db migrate > /dev/null
+	cd orchestration && $(DAG_TEST_ENV) $(AIRFLOW_VENV)/bin/python -m pytest -c pytest.ini tests/dags
+
+airflow-env: ## Write orchestration/.env for Airflow (asks for secrets at hidden prompts)
+	$(UV) run python -m scripts.write_airflow_env
+
+airflow-start: dbt-deps ## Build the image and start Airflow locally with the Astro CLI
+	@test -f orchestration/.env || { echo "orchestration/.env is missing: run make airflow-env first"; exit 1; }
+	mkdir -p data/raw/ga4
+	cd orchestration && astro dev start
+
+airflow-test: ## Run the DAG integrity tests inside the Airflow image
+	cd orchestration && astro dev pytest
+
+airflow-stop: ## Stop the local Airflow containers (data and history are kept)
+	cd orchestration && astro dev stop
 
 dbt-snowflake: ## Build and test dbt on Snowflake (TARGET=dev or prod; profile in ~/.dbt)
 	cd $(DBT_DIR) && $(UV) run dbt deps && $(UV) run dbt build --target $(or $(TARGET),dev)

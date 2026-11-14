@@ -1,0 +1,3 @@
+# Installed into Airflow's own environment. Cosmos renders and runs the dbt
+# project; it is installed against Airflow's constraints.
+astronomer-cosmos==1.16.0

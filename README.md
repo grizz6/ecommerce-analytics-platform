@@ -17,7 +17,7 @@ and findings, is written in the final milestone.
 | M2 | Snowflake setup, load and reconciliation | Done |
 | M3 | dbt staging and intermediate models | Done |
 | M4 | Marts, tests, metric definitions, docs site | Done |
-| M5 | Airflow orchestration | Next |
+| M5 | Airflow orchestration | In review |
 | M6 | Metabase dashboard | Planned |
 | M7 | Power BI report | Planned |
 | M8 | Findings and release | Planned |

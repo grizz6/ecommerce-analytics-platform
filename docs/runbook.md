@@ -270,6 +270,107 @@ on). After changing how `event_key` is built, run once with a full refresh:
 cd transform && uv run dbt build --target dev --full-refresh
 ```
 
+## Orchestration with Airflow
+
+The `ga4_daily` DAG runs one GA4 day per run: extract, load, reconcile, then
+build and test every dbt model (Cosmos, one task per model), then a summary.
+It covers 2020-11-01 to 2021-01-31 with catchup on and one run at a time.
+
+### One-time setup
+
+1. Docker Desktop, **Settings → Resources**: Memory **8 GB**, CPUs **4**,
+   Swap **1 GB**. Enough for Airflow now and Metabase later on an 18 GB Mac.
+2. Install the Astro CLI and check it:
+
+```bash
+brew install astro
+```
+
+```bash
+astro version
+```
+
+3. Install the dbt packages Airflow copies with the project:
+
+```bash
+make setup
+```
+
+4. Write Airflow's settings. Asks for the Snowflake account identifier and
+   both key passphrases at hidden prompts, and writes `orchestration/.env`
+   with owner-only permissions. The file is gitignored.
+
+```bash
+make airflow-env
+```
+
+### Start
+
+```bash
+make airflow-start
+```
+
+The first start builds the image (a few minutes). Open the Airflow UI at the
+address the command prints. Keys and Google credentials are mounted
+read-only from this Mac; nothing secret is built into the image.
+
+### Backfill
+
+The DAG is created paused. Turning it on in the UI starts the backfill: one
+run per day from 2020-11-01, oldest first, one at a time. To backfill only a
+range, for example the first week:
+
+```bash
+cd orchestration && astro dev run backfill create --dag-id ga4_daily --from-date 2020-11-01 --to-date 2020-11-07
+```
+
+Every step is idempotent, so backfilling days that already exist replaces
+them without duplicates.
+
+### Rerun a failed day
+
+In the UI, open **ga4_daily → Grid**, select the failed run and **Clear**
+the failed task; it reruns with its downstream tasks. From the command line:
+
+```bash
+cd orchestration && astro dev run tasks clear ga4_daily --start-date 2020-11-05 --end-date 2020-11-05 --yes
+```
+
+### Stop and tear down
+
+Stop the containers and keep run history:
+
+```bash
+make airflow-stop
+```
+
+Remove the containers and Airflow's metadata database (run history is lost;
+Snowflake and the Parquet files are not touched):
+
+```bash
+cd orchestration && astro dev kill
+```
+
+### Tests
+
+```bash
+make airflow-test
+```
+
+`make dag-test` runs the same tests without Docker, as CI does.
+
+### Cost
+
+Extract stays within the BigQuery sandbox (about 35 MB per day). Each run
+keeps an extra-small warehouse busy for a few minutes, so a full 92-day
+backfill is expected to use a few credits. Check with the credit usage
+queries below after backfilling the first week.
+
+### Screenshots
+
+The grid view and the dbt task graph show no account details. Do not capture
+**Admin → Connections**, which shows the account identifier.
+
 ## Credit usage checks
 
 Run in Snowsight as ACCOUNTADMIN. The resource monitor view is close to real
