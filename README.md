@@ -1,5 +1,8 @@
 # E-commerce Analytics Platform
 
+[![CI](https://github.com/grizz6/ecommerce-analytics-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/grizz6/ecommerce-analytics-platform/actions/workflows/ci.yml)
+[![dbt docs](https://github.com/grizz6/ecommerce-analytics-platform/actions/workflows/docs.yml/badge.svg)](https://grizz6.github.io/ecommerce-analytics-platform/)
+
 An analytics engineering pipeline for the Google Analytics 4 sample e-commerce
 dataset. Data is extracted from BigQuery, loaded into Snowflake, modelled with
 dbt, orchestrated with Airflow and presented in Metabase and Power BI.
