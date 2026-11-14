@@ -58,16 +58,23 @@ Requires [uv](https://docs.astral.sh/uv/) and GNU Make. Everything below runs
 on synthetic data and needs no credentials.
 
 ```bash
-make setup     # install pinned dependencies, git hooks and dbt packages
-make lint      # ruff and sqlfluff
-make test      # pytest with coverage
-make dbt-ci    # generate fixtures, then build and test dbt models on DuckDB
-make docs      # static dbt documentation
+make setup       # install pinned dependencies, git hooks and dbt packages
+make lint        # ruff and sqlfluff (dbt models compiled by dbt first)
+make test        # pytest with coverage
+make dbt-ci      # generate fixtures, then build and test dbt models on DuckDB
+make docs-check  # fail if any model or column has no description
+make docs        # static dbt documentation
 ```
 
-## Decisions
+Running against BigQuery and Snowflake needs credentials on your own machine;
+see the [runbook](docs/runbook.md).
 
-Architecture decision records live in [docs/decisions](docs/decisions/).
+## Reference
+
+- [Metric definitions](docs/metrics.md): every metric exactly as the SQL computes it.
+- [GA4 data notes](docs/ga4_data_notes.md): time zones, obfuscation, duplicates and data quality findings.
+- [Runbook](docs/runbook.md): extract, load, dbt on Snowflake and credit checks.
+- [Decision records](docs/decisions/): why each part of the stack works the way it does.
 
 ## License
 
