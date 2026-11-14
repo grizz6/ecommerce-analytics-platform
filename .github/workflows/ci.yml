@@ -60,6 +60,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
       - run: uv sync --all-groups --locked
       - run: make dbt-ci
+      - run: make docs-check
       - run: make docs
 
   gitleaks:
