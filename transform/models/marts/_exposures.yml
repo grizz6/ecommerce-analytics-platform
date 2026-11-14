@@ -1,0 +1,37 @@
+version: 2
+
+exposures:
+  - name: metabase_marketing_performance
+    label: Marketing Performance (Metabase)
+    type: dashboard
+    maturity: medium
+    description: >
+      Self-hosted Metabase dashboard: KPI row, sessions and revenue trend,
+      funnel by device, revenue by channel, with date, device and channel
+      filters. Connects as BI_SVC with the REPORTER role, which can read only
+      the marts schema.
+    owner:
+      name: Grishma
+    depends_on:
+      - ref('kpi_daily')
+      - ref('fct_funnel_daily')
+      - ref('fct_channel_attribution')
+      - ref('fct_sessions')
+      - ref('dim_date')
+
+  - name: powerbi_ecommerce_analytics
+    label: E-commerce Analytics (Power BI)
+    type: dashboard
+    maturity: medium
+    description: >
+      Power BI report with four pages: Executive Overview, Funnel, Acquisition
+      and Attribution, and Retention. Built from aggregated marts only; no
+      row-level identifiers are published.
+    owner:
+      name: Grishma
+    depends_on:
+      - ref('kpi_daily')
+      - ref('fct_funnel_daily')
+      - ref('fct_channel_attribution')
+      - ref('fct_retention_weekly')
+      - ref('dim_date')

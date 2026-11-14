@@ -16,7 +16,7 @@ EXTRACT := $(UV) run python -m extract_load.bigquery_extract
 LOAD := $(UV) run python -m extract_load.snowflake_load
 RECONCILE := $(UV) run python -m extract_load.reconcile
 
-.PHONY: help setup lint format test fixtures dbt-deps dbt-ci docs secrets clean \
+.PHONY: help setup lint format test fixtures dbt-deps dbt-ci docs docs-check secrets clean \
 	extract-plan extract extract-summary load reconcile dbt-snowflake
 
 help: ## List available targets
@@ -54,6 +54,10 @@ dbt-ci: fixtures dbt-deps ## Build and test every dbt model on DuckDB fixtures
 docs: dbt-deps ## Generate static dbt docs from the DuckDB target
 	mkdir -p $(DUCKDB_DIR)
 	$(DBT_CI) docs generate --static --target ci
+
+docs-check: ## Fail if any dbt model, seed or column lacks a description
+	$(DBT_CI) parse --target ci
+	$(UV) run python -m scripts.check_dbt_docs
 
 extract-plan: ## Dry-run BigQuery for DATE or START/END and report bytes (free)
 	$(EXTRACT) $(EXTRACT_ARGS) --dry-run
