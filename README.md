@@ -8,7 +8,19 @@ dataset. Data is extracted from BigQuery, loaded into Snowflake, modelled with
 dbt, orchestrated with Airflow and presented in Metabase and Power BI.
 
 **Status:** in development. The full README, with architecture, setup steps
-and findings, will be written in the final milestone.
+and findings, is written in the final milestone.
+
+| Milestone | Scope | Status |
+|---|---|---|
+| M0 | Scaffold, tooling, CI | Done |
+| M1 | Extract GA4 from BigQuery to Parquet | Done |
+| M2 | Snowflake setup, load and reconciliation | Done |
+| M3 | dbt staging and intermediate models | Done |
+| M4 | Marts, tests, metric definitions, docs site | Done |
+| M5 | Airflow orchestration | Next |
+| M6 | Metabase dashboard | Planned |
+| M7 | Power BI report | Planned |
+| M8 | Findings and release | Planned |
 
 ## Documentation site
 
