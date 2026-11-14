@@ -136,3 +136,82 @@ models:
         description: First add_payment_info time, UTC.
       - name: first_purchase_ts_utc
         description: First purchase time, UTC.
+
+  - name: int_ga4__orders
+    description: >
+      One row per order from purchase events. A valid transaction id (not null,
+      not empty, not "(not set)") identifies the order; repeats keep the first
+      purchase event. A purchase without a valid transaction id is its own
+      order. Raw user ids stay in this layer.
+    columns:
+      - name: order_key
+        description: Surrogate key from the transaction id, or from the event key when the transaction id is invalid.
+        data_tests: [unique, not_null]
+      - name: transaction_id
+        description: Transaction id as logged.
+      - name: has_valid_transaction_id
+        description: False when the transaction id is missing, empty or "(not set)".
+      - name: purchase_event_count
+        description: Purchase events logged for this order.
+      - name: purchase_event_key
+        description: The purchase event kept for the order.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_ga4__events')
+                field: event_key
+      - name: user_pseudo_id
+        description: Pseudonymous browser identifier. Raw identifier; never published.
+        data_tests: [not_null]
+      - name: session_key
+        description: Session of the purchase event.
+      - name: order_ts_utc
+        description: Purchase event time, UTC.
+      - name: order_date
+        description: Order date in the reporting time zone.
+      - name: revenue_usd
+        description: Purchase revenue in USD; 0 when not logged.
+      - name: tax_usd
+        description: Tax, USD.
+      - name: shipping_usd
+        description: Shipping, USD.
+      - name: item_quantity
+        description: Units, from the ecommerce record or summed from items.
+      - name: unique_items
+        description: Distinct items.
+
+  - name: int_ga4__order_touchpoints
+    description: >
+      One row per order and touchpoint (the ordering user's sessions in the 30
+      days before and including the order), with the credit each attribution
+      model gives that touchpoint. Credits per order sum to 1 under every model.
+    columns:
+      - name: order_key
+        description: The order.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_ga4__orders')
+                field: order_key
+      - name: order_date
+        description: Order date in the reporting time zone.
+      - name: revenue_usd
+        description: Order revenue, USD.
+      - name: session_key
+        description: The touchpoint session.
+      - name: session_start_ts_utc
+        description: Touchpoint session start, UTC.
+      - name: channel_group
+        description: Channel group of the touchpoint session.
+      - name: touch_position
+        description: Position of the touchpoint in time, 1 for the earliest.
+      - name: touch_count
+        description: Number of touchpoints for the order.
+      - name: first_touch_credit
+        description: 1 for the earliest touchpoint, otherwise 0.
+      - name: last_non_direct_credit
+        description: 1 for the latest non-Direct touchpoint (or the latest touchpoint if all are Direct), otherwise 0.
+      - name: linear_credit
+        description: 1 / touch_count.
