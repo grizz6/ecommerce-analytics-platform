@@ -1,0 +1,529 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: >
+      One row per date from 2020-10-31 to 2021-01-31 in the reporting time zone
+      (US East Coast), with ISO week, month and completeness flags. The GA4
+      daily tables are UTC days, so the first and last dates are partial.
+    columns:
+      - name: date_day
+        data_type: date
+        description: Calendar date in the reporting time zone.
+        data_tests: [unique, not_null]
+      - name: week_start_date
+        data_type: date
+        description: Monday of the ISO week containing the date.
+        data_tests: [not_null]
+      - name: month_start_date
+        data_type: date
+        description: First day of the month.
+      - name: calendar_year
+        data_type: bigint
+        description: Calendar year.
+      - name: calendar_month
+        data_type: bigint
+        description: Calendar month, 1 to 12.
+      - name: iso_day_of_week
+        data_type: bigint
+        description: ISO day of week, Monday 1 to Sunday 7.
+      - name: day_name
+        data_type: varchar
+        description: Day name, Monday to Sunday.
+      - name: is_weekend
+        data_type: boolean
+        description: True on Saturday and Sunday.
+      - name: is_complete_reporting_day
+        data_type: boolean
+        description: >
+          True from 2020-11-01 to 2021-01-30, the days fully covered by the
+          data. Daily marts use only these days.
+      - name: is_complete_week
+        data_type: boolean
+        description: True when all seven days of the ISO week are complete. Retention uses only these weeks.
+
+  - name: dim_users
+    description: >
+      One row per user, keyed by a SHA-256 hash of the pseudonymous browser id.
+      Raw identifiers never leave the staging and intermediate layers.
+    columns:
+      - name: user_key
+        data_type: varchar
+        description: SHA-256 hash of user_pseudo_id.
+        data_tests: [unique, not_null]
+      - name: first_seen_date
+        data_type: date
+        description: Date of the user's first observed session (reporting time zone).
+        data_tests: [not_null]
+      - name: first_seen_week_start_date
+        data_type: date
+        description: Monday of the week of the first observed session.
+      - name: is_new_user
+        data_type: boolean
+        description: True when the first observed session is the user's first ever (ga_session_number = 1).
+      - name: first_touch_channel_group
+        data_type: varchar
+        description: Channel group of the first observed session.
+        data_tests: [not_null]
+      - name: first_device_category
+        data_type: varchar
+        description: Device category of the first observed session.
+      - name: first_country
+        data_type: varchar
+        description: Country of the first observed session.
+      - name: sessions
+        data_type: bigint
+        description: Sessions by this user in the data.
+      - name: orders
+        data_type: bigint
+        description: Orders by this user.
+      - name: revenue_usd
+        data_type: double
+        description: Revenue from this user's orders, USD.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: is_purchaser
+        data_type: boolean
+        description: True when the user placed at least one order.
+
+  - name: fct_sessions
+    description: One row per session with engagement, channel, orders and revenue.
+    columns:
+      - name: session_key
+        data_type: varchar
+        description: Surrogate key for the session.
+        data_tests: [unique, not_null]
+      - name: user_key
+        data_type: varchar
+        description: Hashed user key.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_key
+      - name: session_date
+        data_type: date
+        description: Session start date in the reporting time zone.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: session_start_ts_utc
+        data_type: timestamp
+        description: First event time in the session, UTC.
+      - name: session_end_ts_utc
+        data_type: timestamp
+        description: Last event time in the session, UTC.
+      - name: session_duration_seconds
+        data_type: bigint
+        description: Seconds between the first and last event.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: is_first_session
+        data_type: boolean
+        description: True for the user's first ever session.
+      - name: is_engaged
+        data_type: boolean
+        description: True for a GA4 engaged session.
+      - name: event_count
+        data_type: bigint
+        description: Events in the session.
+      - name: page_views
+        data_type: bigint
+        description: page_view events in the session.
+      - name: engagement_time_msec
+        data_type: bigint
+        description: Total engagement time reported, milliseconds.
+      - name: landing_page
+        data_type: varchar
+        description: URL of the first page_view.
+      - name: device_category
+        data_type: varchar
+        description: desktop, mobile or tablet.
+      - name: device_operating_system
+        data_type: varchar
+        description: Operating system.
+      - name: device_browser
+        data_type: varchar
+        description: Browser.
+      - name: geo_country
+        data_type: varchar
+        description: Country.
+      - name: session_source
+        data_type: varchar
+        description: Session source; (direct) when none was recorded.
+      - name: session_medium
+        data_type: varchar
+        description: Session medium; (none) when none was recorded.
+      - name: session_campaign
+        data_type: varchar
+        description: Session campaign.
+      - name: session_channel_group
+        data_type: varchar
+        description: GA4 default channel group.
+        data_tests: [not_null]
+      - name: has_purchase
+        data_type: boolean
+        description: True when the session logged a purchase event.
+      - name: orders
+        data_type: bigint
+        description: Orders attributed to this session (the session of the purchase event).
+      - name: revenue_usd
+        data_type: double
+        description: Revenue from those orders, USD.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+  - name: fct_orders
+    description: >
+      One row per order. A repeated transaction id counts once (first purchase
+      event kept); a purchase without a valid transaction id is its own order,
+      flagged by has_valid_transaction_id.
+    columns:
+      - name: order_key
+        data_type: varchar
+        description: Surrogate key for the order.
+        data_tests: [unique, not_null]
+      - name: transaction_id
+        data_type: varchar
+        description: Transaction id as logged. May be null or "(not set)" when invalid.
+      - name: has_valid_transaction_id
+        data_type: boolean
+        description: False when the transaction id is missing, empty or "(not set)".
+        data_tests: [not_null]
+      - name: purchase_event_count
+        data_type: bigint
+        description: Purchase events logged for this order; above 1 means the same transaction was logged again.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+      - name: session_key
+        data_type: varchar
+        description: Session of the purchase event.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fct_sessions')
+                field: session_key
+      - name: user_key
+        data_type: varchar
+        description: Hashed user key.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_key
+      - name: order_ts_utc
+        data_type: timestamp
+        description: Purchase event time, UTC.
+        data_tests: [not_null]
+      - name: order_date
+        data_type: date
+        description: Order date in the reporting time zone.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: revenue_usd
+        data_type: double
+        description: Purchase revenue in USD, including tax and shipping; 0 when not logged.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: tax_usd
+        data_type: double
+        description: Tax, USD.
+      - name: shipping_usd
+        data_type: double
+        description: Shipping, USD.
+      - name: item_quantity
+        data_type: bigint
+        description: Units in the order.
+      - name: unique_items
+        data_type: bigint
+        description: Distinct items in the order.
+      - name: device_category
+        data_type: varchar
+        description: Device of the purchase session.
+      - name: geo_country
+        data_type: varchar
+        description: Country of the purchase session.
+      - name: session_channel_group
+        data_type: varchar
+        description: Channel group of the purchase session.
+
+  - name: fct_funnel_daily
+    description: >
+      Closed purchase funnel per complete day, device and channel. A session
+      counts at a step only if it logged every earlier step, so step rates stay
+      between 0 and 1. purchase_sessions_any counts every purchasing session.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [session_date, device_category, session_channel_group]
+    columns:
+      - name: session_date
+        data_type: date
+        description: Session date (complete reporting days only).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: device_category
+        data_type: varchar
+        description: Device category; (not set) when unknown.
+      - name: session_channel_group
+        data_type: varchar
+        description: GA4 default channel group.
+      - name: sessions
+        data_type: bigint
+        description: Sessions.
+      - name: view_item_sessions
+        data_type: bigint
+        description: Sessions that logged view_item.
+      - name: add_to_cart_sessions
+        data_type: bigint
+        description: Sessions that logged view_item and add_to_cart.
+      - name: begin_checkout_sessions
+        data_type: bigint
+        description: Sessions that reached begin_checkout through every earlier step.
+      - name: add_shipping_info_sessions
+        data_type: bigint
+        description: Sessions that reached add_shipping_info through every earlier step.
+      - name: add_payment_info_sessions
+        data_type: bigint
+        description: Sessions that reached add_payment_info through every earlier step.
+      - name: purchase_sessions
+        data_type: bigint
+        description: Sessions that reached purchase through every earlier step.
+      - name: purchase_sessions_any
+        data_type: bigint
+        description: Sessions with any purchase event, whether or not earlier steps were logged.
+      - name: view_item_rate
+        data_type: double
+        description: view_item_sessions / sessions.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+              config:
+                where: "view_item_rate is not null"
+      - name: add_to_cart_rate
+        data_type: double
+        description: add_to_cart_sessions / view_item_sessions.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+              config: {where: "add_to_cart_rate is not null"}
+      - name: begin_checkout_rate
+        data_type: double
+        description: begin_checkout_sessions / add_to_cart_sessions.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+              config: {where: "begin_checkout_rate is not null"}
+      - name: add_shipping_info_rate
+        data_type: double
+        description: add_shipping_info_sessions / begin_checkout_sessions.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+              config: {where: "add_shipping_info_rate is not null"}
+      - name: add_payment_info_rate
+        data_type: double
+        description: add_payment_info_sessions / add_shipping_info_sessions.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+              config: {where: "add_payment_info_rate is not null"}
+      - name: purchase_rate
+        data_type: double
+        description: purchase_sessions / add_payment_info_sessions.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+              config: {where: "purchase_rate is not null"}
+      - name: overall_conversion_rate
+        data_type: double
+        description: purchase_sessions_any / sessions. Matches kpi_daily.conversion_rate.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+              config: {where: "overall_conversion_rate is not null"}
+
+  - name: fct_channel_attribution
+    description: >
+      Attributed orders and revenue per complete order date, channel group and
+      attribution model, with a 30-day lookback. For each model, attributed
+      revenue across channels equals order revenue.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [order_date, channel_group, attribution_model]
+    columns:
+      - name: order_date
+        data_type: date
+        description: Order date (complete reporting days only).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: channel_group
+        data_type: varchar
+        description: GA4 default channel group of the credited sessions.
+        data_tests: [not_null]
+      - name: attribution_model
+        data_type: varchar
+        description: first_touch, last_non_direct or linear.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [first_touch, last_non_direct, linear]
+      - name: attributed_orders
+        data_type: double
+        description: Orders credited to the channel; fractional under linear.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: attributed_revenue_usd
+        data_type: double
+        description: Revenue credited to the channel, USD.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+  - name: fct_retention_weekly
+    description: >
+      Weekly retention of new users by first-visit cohort week, acquisition
+      channel and first device, over complete ISO weeks. Counts are additive
+      across channels and devices within a cohort and week.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - cohort_week_start_date
+              - activity_week_start_date
+              - first_touch_channel_group
+              - first_device_category
+    columns:
+      - name: cohort_week_start_date
+        data_type: date
+        description: Monday of the week of the users' first ever session.
+        data_tests: [not_null]
+      - name: activity_week_start_date
+        data_type: date
+        description: Monday of the week being measured.
+        data_tests: [not_null]
+      - name: weeks_since_first_visit
+        data_type: bigint
+        description: Whole weeks between the cohort week and the activity week; 0 is the first week.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: first_touch_channel_group
+        data_type: varchar
+        description: Channel group of the users' first session.
+      - name: first_device_category
+        data_type: varchar
+        description: Device category of the users' first session.
+      - name: cohort_users
+        data_type: bigint
+        description: New users in the cohort.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+      - name: active_users
+        data_type: bigint
+        description: Cohort users with at least one session in the activity week.
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "<= cohort_users"
+      - name: retention_rate
+        data_type: double
+        description: active_users / cohort_users.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+
+  - name: kpi_daily
+    description: >
+      Headline KPIs per complete reporting day. Sessions, users and new users by
+      session date; purchases and revenue by order date.
+    columns:
+      - name: date_day
+        data_type: date
+        description: Reporting date (complete days only).
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: sessions
+        data_type: bigint
+        description: Sessions that started on the day.
+      - name: users
+        data_type: bigint
+        description: Distinct users with a session on the day.
+      - name: new_users
+        data_type: bigint
+        description: Distinct users whose first ever session was on the day.
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "<= users"
+      - name: purchasing_sessions
+        data_type: bigint
+        description: Sessions on the day with a purchase event.
+      - name: purchases
+        data_type: bigint
+        description: Orders placed on the day.
+      - name: revenue_usd
+        data_type: double
+        description: Revenue from orders placed on the day, USD.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: conversion_rate
+        data_type: double
+        description: purchasing_sessions / sessions.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+              config: {where: "conversion_rate is not null"}
+      - name: average_order_value_usd
+        data_type: double
+        description: revenue_usd / purchases.
+      - name: revenue_per_user_usd
+        data_type: double
+        description: revenue_usd / users.
