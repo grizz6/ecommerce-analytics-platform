@@ -43,9 +43,10 @@ aliasing = explicit
 aliasing = explicit
 
 [sqlfluff:rules:references.keywords]
-# GA4 export column names that are also SQL keywords. They must keep the
-# source names so loading can match columns by name.
-ignore_words = platform,geo
+# Column names that are also SQL keywords but are not reserved in Snowflake
+# or DuckDB: GA4 export names (platform, geo), which must match the source,
+# and the users KPI.
+ignore_words = platform,geo,users
 
 [sqlfluff:rules:ambiguous.column_references]
 group_by_and_order_by_style = explicit

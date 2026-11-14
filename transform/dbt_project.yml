@@ -26,6 +26,9 @@ vars:
   # Incremental runs on Snowflake reprocess this many days before the latest
   # loaded GA4 date, so reloaded or late-arriving days are merged again.
   event_lookback_days: 3
+  # Orders are attributed to the user's sessions in this many days before and
+  # including the order.
+  attribution_lookback_days: 30
 
 models:
   ecommerce_analytics:
@@ -35,6 +38,14 @@ models:
     intermediate:
       +schema: intermediate
       +materialized: table
+    marts:
+      # BI-facing tables. Contracts make column names and types part of the
+      # interface; every mart casts each column explicitly so the same
+      # declared types hold on Snowflake and DuckDB.
+      +schema: marts
+      +materialized: table
+      +contract:
+        enforced: true
 
 seeds:
   ecommerce_analytics:

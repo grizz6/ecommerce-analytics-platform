@@ -44,3 +44,22 @@
 {% macro duckdb__parse_yyyymmdd(column) -%}
     cast(strptime({{ column }}, '%Y%m%d') as date)
 {%- endmacro %}
+
+{#- ISO day of week: Monday is 1, Sunday is 7. -#}
+{% macro iso_day_of_week(column) %}
+    {{ return(adapter.dispatch('iso_day_of_week', 'ecommerce_analytics')(column)) }}
+{% endmacro %}
+
+{% macro snowflake__iso_day_of_week(column) -%}
+    dayofweekiso({{ column }})
+{%- endmacro %}
+
+{% macro duckdb__iso_day_of_week(column) -%}
+    isodow({{ column }})
+{%- endmacro %}
+
+
+{#- Monday of the ISO week containing a date, as a date. -#}
+{% macro iso_week_start(column) -%}
+    cast({{ dbt.date_trunc('week', column) }} as date)
+{%- endmacro %}
