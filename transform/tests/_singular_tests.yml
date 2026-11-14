@@ -11,3 +11,7 @@ data_tests:
     description: >
       Warning only. Counts sessions that logged a funnel step without the
       previous one, which GA4 does not prevent.
+  - name: assert_attributed_revenue_totals_match_kpi_revenue
+    description: >
+      For each attribution model, total attributed revenue on complete days
+      equals total revenue in kpi_daily.

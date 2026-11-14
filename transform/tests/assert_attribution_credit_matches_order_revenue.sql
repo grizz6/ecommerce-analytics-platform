@@ -2,6 +2,11 @@
     Under every attribution model, the credit given to an order's touchpoints
     must add up to exactly the order's revenue, and every order must have
     touchpoints. Returns orders that break either rule.
+
+    The tolerance only absorbs double-precision rounding (around 1e-12). It is
+    deliberately far smaller than a cent: a looser tolerance once hid linear
+    credits computed with six-decimal fixed-point division, which lost a
+    fraction of a cent on every order.
 #}
 
 with
@@ -38,6 +43,6 @@ left join credited
     on orders.order_key = credited.order_key
 where
     credited.order_key is null
-    or abs(credited.first_touch_revenue - orders.revenue_usd) > 0.005
-    or abs(credited.last_non_direct_revenue - orders.revenue_usd) > 0.005
-    or abs(credited.linear_revenue - orders.revenue_usd) > 0.005
+    or abs(credited.first_touch_revenue - orders.revenue_usd) > 0.000001
+    or abs(credited.last_non_direct_revenue - orders.revenue_usd) > 0.000001
+    or abs(credited.linear_revenue - orders.revenue_usd) > 0.000001

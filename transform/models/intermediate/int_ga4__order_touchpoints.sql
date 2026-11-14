@@ -109,7 +109,10 @@ final as (
             when touch_position = touch_count then 1.0
             else 0.0
         end as last_non_direct_credit,
-        1.0 / touch_count as linear_credit
+        -- Double precision on purpose: Snowflake's fixed-point division keeps
+        -- six decimals, so 1.0 / 3 would give 0.333333 and three thirds would
+        -- add up to 0.999999 of the order.
+        {{ safe_divide('1', 'touch_count') }} as linear_credit
     from positioned
 
 )
