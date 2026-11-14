@@ -1,0 +1,21 @@
+# Mounts for local runs with the Astro CLI. Nothing secret is built into the
+# image: Snowflake keys and Google credentials are mounted read-only from this
+# Mac, and settings come from the gitignored .env file (make airflow-env).
+#
+# - project code and the dbt project: read-only
+# - data folder: read-write, because extract writes Parquet files there
+x-project-mounts: &project-mounts
+  volumes:
+    - ../extract_load:/usr/local/airflow/project/extract_load:ro
+    - ../transform:/usr/local/airflow/project/transform:ro
+    - ../data:/usr/local/airflow/project/data
+    - ${HOME}/.snowflake/keys:/usr/local/airflow/keys:ro
+    - ${HOME}/.config/gcloud/application_default_credentials.json:/usr/local/airflow/gcloud/adc.json:ro
+
+services:
+  scheduler:
+    <<: *project-mounts
+  dag-processor:
+    <<: *project-mounts
+  triggerer:
+    <<: *project-mounts

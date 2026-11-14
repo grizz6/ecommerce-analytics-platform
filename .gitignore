@@ -30,6 +30,7 @@ logs/
 
 # Python
 .venv/
+.venv-airflow/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -41,7 +42,9 @@ htmlcov/
 *.egg-info/
 
 # Airflow (Astro CLI)
-orchestration/.astro/
+# Keep the Astro project marker, ignore everything else the CLI writes there.
+orchestration/.astro/*
+!orchestration/.astro/config.yaml
 orchestration/logs/
 orchestration/.env
 
