@@ -1,0 +1,5 @@
+# Extract and load virtual environment (the DAG's extract, load and reconcile
+# tasks run here). Same versions as the project's pyproject.toml.
+pyarrow==26.0.1
+google-cloud-bigquery==3.47.0
+snowflake-connector-python==5.2.0

@@ -1,0 +1,5 @@
+.astro
+.env
+airflow_settings.yaml
+logs
+tests

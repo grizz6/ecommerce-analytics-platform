@@ -15,7 +15,7 @@ from extract_load.bigquery_extract import write_day
 from extract_load.ga4_schema import GA4_EVENTS_SCHEMA
 from scripts.generate_fixtures import FixtureConfig, generate_events
 
-PASSPHRASE = "not-a-real-passphrase"  # noqa: S105 - test value, never a real key
+PASSPHRASE = "not-a-real-passphrase"
 ACCOUNT = "example-account"
 
 
