@@ -10,6 +10,8 @@ dbt, orchestrated with Airflow and presented in Metabase and Power BI.
 **Status:** in development. The full README, with architecture, setup steps
 and findings, is written in the final milestone.
 
+## Progress to date
+
 | Milestone | Scope | Status |
 |---|---|---|
 | M0 | Scaffold, tooling, CI | Done |
@@ -21,6 +23,49 @@ and findings, is written in the final milestone.
 | M6 | Metabase dashboard | Planned |
 | M7 | Power BI report | Planned |
 | M8 | Findings and release | Planned |
+
+### What is built
+
+- **Extract (M1).** A Python extractor reads the 92 daily GA4 tables
+  (2020-11-01 to 2021-01-31) from the public BigQuery dataset into daily
+  Parquet files, keeping nested fields nested. Every query is dry-run first
+  and refused above a byte limit. The full extract of 4,295,584 events
+  processed 3.24 GiB, inside BigQuery's free tier.
+- **Load (M2).** Snowflake is set up with least-privilege roles (load,
+  transform, report), extra-small warehouses that suspend after 60 seconds,
+  key-pair-only service users and a 50-credit spending cap. Each day loads
+  in one transaction that replaces the day and commits only when row counts
+  match; reconciliation matched all 92 days.
+- **Model (M3, M4).** dbt builds staging, intermediate and eight mart tables
+  answering the four business questions: funnel by device and channel,
+  channel revenue under three attribution models, weekly retention cohorts,
+  and daily KPIs. The same project runs on Snowflake and on DuckDB through
+  cross-database macros. Marts enforce contracts and never expose raw user
+  identifiers.
+- **Test.** The full dbt build, with its data tests and unit tests, passes on
+  Snowflake and on DuckDB, including checks that attribution credit adds up
+  to order revenue and that week-0 retention is 100 percent. 152 Python tests
+  cover extraction, loading and tooling with 98 percent coverage.
+- **Orchestrate (M5, in review).** An Airflow 3 DAG runs extract, load,
+  reconcile and a Cosmos dbt task group for each day, with retries and safe
+  backfills. DAG integrity tests run in CI.
+- **Automate.** Every push runs linting (Python and SQL), the Python tests,
+  the dbt build on synthetic data, the DAG tests and a secret scan. The dbt
+  documentation site is published on every change to `main`.
+
+### What the checks found in the data
+
+- No exact duplicate events, and every event belongs to a session.
+- 16.9 percent of orders have no usable transaction id, and 6.1 percent of
+  transactions were logged more than once; both are handled so revenue is
+  neither lost nor double counted.
+- 1.4 percent of sessions log a funnel step without the step before it, which
+  GA4 does not prevent; a warning-level test reports it on every run.
+- An early run found linear attribution three cents short in total, caused by
+  six-decimal fixed-point division in Snowflake. It is fixed, and the tests
+  now compare revenue to well under a cent.
+
+Details are in the [GA4 data notes](docs/ga4_data_notes.md).
 
 ## Documentation site
 
