@@ -118,4 +118,5 @@ secrets: ## Scan git history and staged changes for secrets (needs gitleaks inst
 	gitleaks git --redact --no-banner --staged .
 
 clean: ## Remove generated data and build output
-	rm -rf $(CURDIR)/data/fixtures $(DUCKDB_DIR) $(DBT_DIR)/target $(DBT_DIR)/dbt_packages $(DBT_DIR)/logs
+	rm -rf $(CURDIR)/data/fixtures $(DUCKDB_DIR) $(DBT_DIR)/target $(DBT_DIR)/dbt_packages $(DBT_DIR)/logs \
+		$(CURDIR)/data/airflow-test $(AIRFLOW_VENV)
