@@ -119,7 +119,7 @@ see the [runbook](docs/runbook.md).
 - [Metric definitions](docs/metrics.md): every metric exactly as the SQL computes it.
 - [GA4 data notes](docs/ga4_data_notes.md): time zones, obfuscation, duplicates and data quality findings.
 - [Runbook](docs/runbook.md): extract, load, dbt on Snowflake and credit checks.
-- [Decision records](docs/decisions/): why each part of the stack works the way it does.
+- [Decision records](docs/decisions/README.md): why each part of the stack works the way it does.
 
 ## License
 
