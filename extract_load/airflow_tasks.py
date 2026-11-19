@@ -70,7 +70,13 @@ def run_load(day: str) -> dict[str, Any]:
 
 
 def run_reconcile(day: str) -> dict[str, Any]:
-    """Check that the day, and every other extracted day, matches in Snowflake."""
+    """Check that the day, and every other day loaded so far, matches in Snowflake.
+
+    Days in the manifest that are not in Snowflake yet are skipped, because a
+    backfill loads one day per run: when the first day is reconciled, the
+    later days have not been loaded. The run's own day must match, and any
+    count mismatch or day that was never extracted still fails the task.
+    """
     configure_logging()
     event_date = _parse_day(day).strftime(EVENT_DATE_FORMAT)
     manifest = bigquery_extract.load_manifest(ExtractSettings.from_env().raw_data_dir)
@@ -80,7 +86,12 @@ def run_reconcile(day: str) -> dict[str, Any]:
         loaded = reconcile.fetch_counts(connection, settings)
     finally:
         connection.close()
-    expected = {key: entry["rows"] for key, entry in manifest.items()}
+    expected = {
+        key: entry["rows"] for key, entry in manifest.items() if key in loaded or key == event_date
+    }
+    not_loaded_yet = len(manifest) - len(expected)
+    if not_loaded_yet:
+        logger.info("%d extracted day(s) are not loaded yet and were skipped", not_loaded_yet)
     result = reconcile.compare(expected, loaded)
     reconcile.report(result)
     if event_date not in result.matched:
