@@ -19,7 +19,7 @@ and findings, is written in the final milestone.
 | M2 | Snowflake setup, load and reconciliation | Done |
 | M3 | dbt staging and intermediate models | Done |
 | M4 | Marts, tests, metric definitions, docs site | Done |
-| M5 | Airflow orchestration | In review |
+| M5 | Airflow orchestration | Built; full backfill pending |
 | M6 | Metabase dashboard | Planned |
 | M7 | Power BI report | Planned |
 | M8 | Findings and release | Planned |
@@ -44,9 +44,9 @@ and findings, is written in the final milestone.
   identifiers.
 - **Test.** The full dbt build, with its data tests and unit tests, passes on
   Snowflake and on DuckDB, including checks that attribution credit adds up
-  to order revenue and that week-0 retention is 100 percent. 152 Python tests
-  cover extraction, loading and tooling with 98 percent coverage.
-- **Orchestrate (M5, in review).** An Airflow 3 DAG runs extract, load,
+  to order revenue and that week-0 retention is 100 percent. More than 150
+  Python tests cover extraction, loading and tooling with 98 percent coverage.
+- **Orchestrate (M5, built; full backfill pending).** An Airflow 3 DAG runs extract, load,
   reconcile and a Cosmos dbt task group for each day, with retries and safe
   backfills. DAG integrity tests run in CI.
 - **Automate.** Every push runs linting (Python and SQL), the Python tests,
@@ -109,6 +109,7 @@ make test        # pytest with coverage
 make dbt-ci      # generate fixtures, then build and test dbt models on DuckDB
 make docs-check  # fail if any model or column has no description
 make docs        # static dbt documentation
+make dag-test    # Airflow DAG integrity tests, without Docker
 ```
 
 Running against BigQuery and Snowflake needs credentials on your own machine;
