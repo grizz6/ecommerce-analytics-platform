@@ -53,6 +53,25 @@ def test_reconcile_fails_when_day_is_missing(
         airflow_tasks.run_reconcile("2020-11-02")
 
 
+def test_reconcile_skips_days_not_loaded_yet(
+    loader_env: ExtractedData, snowflake: FakeSnowflake
+) -> None:
+    # The first run of a backfill: only its own day is in Snowflake so far.
+    airflow_tasks.run_load("2020-11-01")
+    summary = airflow_tasks.run_reconcile("2020-11-01")
+    assert summary["days_matched"] == 1
+    assert summary["total_rows"] == loader_env.manifest["20201101"]["rows"]
+
+
+def test_reconcile_fails_on_a_day_that_was_never_extracted(
+    loader_env: ExtractedData, snowflake: FakeSnowflake
+) -> None:
+    airflow_tasks.run_load("2020-11-01")
+    snowflake.table["20201231"] = 10
+    with pytest.raises(airflow_tasks.PipelineStepError, match="differ"):
+        airflow_tasks.run_reconcile("2020-11-01")
+
+
 def test_reconcile_fails_when_another_day_differs(
     loader_env: ExtractedData, snowflake: FakeSnowflake
 ) -> None:
