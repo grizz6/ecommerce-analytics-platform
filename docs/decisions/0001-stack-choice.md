@@ -24,7 +24,7 @@ the Snowflake trial ends, the project must still run end to end without it.
 | Adapters | dbt-snowflake, dbt-duckdb | 1.12.5, 1.11.1 | One project, two targets. DuckDB keeps the project reproducible for free and lets CI run without credentials. |
 | Local engine | DuckDB | 1.5.6 | Mature 1.5 line. Reads Parquet directly. |
 | Shared macros | dbt_utils | 1.4.1 | Surrogate keys, expression tests, date spine. |
-| Orchestration | Airflow 3 on Astro Runtime 3.3, with Astronomer Cosmos | Runtime 3.3-9 (Airflow 3.3.2), Cosmos 1.16.0 | Industry-standard scheduler. Cosmos renders each dbt model as its own task. Exact image tag and Cosmos version are confirmed again in M5. |
+| Orchestration | Airflow 3 on Astro Runtime 3.3, with Astronomer Cosmos | Runtime 3.3-12 (Airflow 3.3.2), Cosmos 1.16.0 | Industry-standard scheduler. Cosmos renders each dbt model as its own task. The image tag was moved from 3.3-9 to 3.3-12 in M5; see [0006](0006-orchestration.md). |
 | Containers | Docker Desktop | Current release | Assumed by the Astro CLI documentation. Free for personal and educational use. |
 | BI | Metabase (self-hosted) and Power BI (school account) | Pinned in M6 and M7 | One open-source tool and one tool widely used by employers. |
 | Quality | ruff, sqlfluff, pytest, pre-commit, gitleaks | 0.17.4, 4.5.0, 9.2.0, 4.7.0, 8.30.1 | Linting, formatting, tests and secret scanning, locally and in CI. |
